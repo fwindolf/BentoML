@@ -263,6 +263,11 @@ class ModelRepositorySchema(ResourceSchema):
 
 
 @attr.define
+class ModelWithRepositorySchema(ModelSchema):
+    repository: Optional[ModelRepositorySchema] = attr.field(default=None)
+
+
+@attr.define
 class CreateModelSchema:
     description: str
     version: str
@@ -275,3 +280,164 @@ class CreateModelSchema:
 class FinishUploadModelSchema:
     status: Optional[ModelUploadStatus]
     reason: Optional[str]
+
+
+@attr.define
+class BentoFullSchema(BentoSchema):
+    models: List[ModelWithRepositorySchema] = attr.field(factory=list)
+
+
+class DeploymentTargetCanaryRuleType(Enum):
+    WEIGHT = "weight"
+    HEADER = "header"
+    COOKIE = "cookie"
+
+
+@attr.define
+class DeploymentTargetCanaryRule:
+    type: DeploymentTargetCanaryRuleType
+
+    weight: Optional[int]
+    header: Optional[str]
+    cookie: Optional[str]
+    header_value: Optional[str]
+
+
+@attr.define
+class DeploymentTargetResourceItem:
+    cpu: Optional[str]
+    memory: Optional[str]
+    gpu: Optional[str]
+
+
+@attr.define
+class DeploymentTargetResources:
+    requests: Optional[DeploymentTargetResourceItem]
+    limits: Optional[DeploymentTargetResourceItem]
+
+
+@attr.define
+class DeploymentTargetHPAConf:
+    cpu: Optional[int]
+    gpu: Optional[int]
+    memory: Optional[str]
+    qps: Optional[int]
+    min_replicas: Optional[int]
+    max_replicas: Optional[int]
+
+
+@attr.define
+class DeploymentTargetRunnerConfig:
+    resources: Optional[DeploymentTargetResources]
+    hpa_conf: Optional[DeploymentTargetHPAConf]
+    envs: Optional[List[LabelItemSchema]]
+
+
+@attr.define
+class DeploymentTargetConfig:
+    kubeResourceUid: str
+    kubeResourceVersion: str
+    resources: DeploymentTargetResources
+    hpa_conf: Optional[DeploymentTargetHPAConf]
+    envs: Optional[List[LabelItemSchema]]
+    runners: Optional[Dict[str, DeploymentTargetRunnerConfig]]
+    enable_ingress: Optional[bool]
+
+
+@attr.define
+class DeploymentTargetSchema(ResourceSchema):
+    bento: BentoFullSchema
+    canary_rules: List[DeploymentTargetCanaryRule]
+    config: DeploymentTargetConfig
+
+
+class DeploymentTargetType(Enum):
+    STABLE = "stable"
+    CANARY = "canary"
+
+
+@attr.define
+class DeploymentTargetTypeSchema:
+    type: DeploymentTargetType
+
+
+@attr.define
+class CreateDeploymentTargetSchema(DeploymentTargetTypeSchema):
+    bento_repository: str
+    bento: str
+    canary_rules: List[DeploymentTargetCanaryRule]
+    config: DeploymentTargetConfig
+
+
+class DeploymentRevisionStatus(Enum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+
+
+@attr.define
+class DeploymentRevisionSchema(ResourceSchema):
+    status: DeploymentRevisionStatus
+    targets: List[DeploymentTargetSchema]
+
+
+@attr.define
+class DeploymentRevisionListSchema(BaseListSchema):
+    items: List[DeploymentRevisionSchema]
+
+
+@attr.define
+class ClusterConfigAWSSchema:
+    region: str
+
+
+@attr.define
+class ClusterConfigSchema:
+    default_deployment_kube_namespace: str
+    ingress_ip: str
+    aws: ClusterConfigAWSSchema
+
+
+@attr.define
+class ClusterFullSchema(ClusterSchema):
+    organization: OrganizationSchema
+    kube_config: Optional[str]
+    config: Optional[ClusterConfigSchema]
+    grafana_root_path: str
+
+
+class DeploymentStatus(Enum):
+    UNKNOWN = "unknown"
+    NONDEPLOYED = "non-deployed"
+    RUNNING = "running"
+    UNHEALTHY = "unhealthy"
+    FAILED = "failed"
+    DEPLOYING = "deploying"
+
+
+@attr.define
+class DeploymentSchema(ResourceSchema):
+
+    cluster: ClusterFullSchema
+    status: DeploymentStatus
+    urls: List[str]
+    latest_revision: DeploymentRevisionSchema
+    kube_namespace: str
+
+
+@attr.define
+class DeploymentListSchema(BaseListSchema):
+    items: List[DeploymentSchema]
+
+
+@attr.define
+class UpdateDeploymentSchema:
+    targets: List[CreateDeploymentTargetSchema]
+    labels: LabelItemSchema
+    description: Optional[str]
+    do_not_deploy: Optional[bool]
+
+
+@attr.define
+class CreateDeploymentSchema(UpdateDeploymentSchema):
+    name: str
+    kube_namespace: str
