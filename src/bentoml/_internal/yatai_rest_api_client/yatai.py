@@ -8,7 +8,6 @@ import requests
 from .schemas import UserSchema
 from .schemas import BentoSchema
 from .schemas import ModelSchema
-from .schemas import ClusterSchema
 from .schemas import schema_to_json
 from .schemas import DeploymentSchema
 from .schemas import schema_from_json
