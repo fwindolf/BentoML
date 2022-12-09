@@ -22,6 +22,7 @@ For common PyTorch models with single input:
 .. code-block:: python
     :caption: `train.py`
 
+    import bentoml
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -74,7 +75,7 @@ For common PyTorch models with single input:
     import torch.optim as optim
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
     for epoch in range(2):  # a small epoch just for demostration purpose
         for i, data in enumerate(trainloader, 0):
@@ -85,7 +86,7 @@ For common PyTorch models with single input:
             optimizer.zero_grad()
 
             # forward + backward + optimize
-            outputs = net(inputs)
+            outputs = model(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -96,7 +97,7 @@ For common PyTorch models with single input:
     bentoml.pytorch.save(
         model,
         "my_torch_model",
-        signatures={"__call__": {"batchable": True, "batchdim": 0}},
+        signatures={"__call__": {"batchable": True, "batch_dim": 0}},
     )
 
 
@@ -125,14 +126,30 @@ For common PyTorch models with single input:
     bentoml.pytorch.save(
         model,
         "my_torch_model",
-        signatures={"__call__": {"batchable": True, "batchdim": 0}},
+        signatures={"__call__": {"batchable": True, "batch_dim": 0}},
     )
 
 .. note::
 
-    :bdg-info:`Remarks:` All of the external python modules/util functions that the model
-    requires must be included in the project. The PyTorch framework requires them to restore
-    the model.
+    :bdg-info:`Remarks:` External python classes or utility functions required by the model must be referenced in ``<module>.<class>`` format, and such modules should be passed to ``bentoml.pytorch.save`` via ``external_modules``. For example:
+
+    .. code-block:: python
+       :caption: `train.py`
+       :emphasize-lines: 1,8
+
+       import my_models
+
+       model = my_models.MyModel()
+       bentoml.pytorch.save(
+           model,
+           "my_torch_model",
+           signatures={"__call__": {"batchable": True, "batch_dim": 0}},
+           external_modules=[my_models],
+       )
+
+    This is due to a limitation from PyTorch model serialisation, where PyTorch requires the model's source code to restore it.
+
+    A better practice is to compile your model to `TorchScript <https://pytorch.org/docs/stable/jit.html>`_ format.
 
 .. note::
 

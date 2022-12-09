@@ -1,5 +1,7 @@
+# pylint: disable=unused-argument
 from __future__ import annotations
 
+import typing as t
 import logging
 from typing import TYPE_CHECKING
 from unittest.mock import Mock
@@ -9,6 +11,9 @@ import pytest
 from schema import Or
 from schema import And
 from schema import Schema
+from prometheus_client.parser import (
+    text_string_to_metric_families,  # type: ignore (no prometheus types)
+)
 
 import bentoml
 from bentoml._internal.utils import analytics
@@ -18,6 +23,7 @@ if TYPE_CHECKING:
 
     from _pytest.logging import LogCaptureFixture
     from _pytest.monkeypatch import MonkeyPatch
+    from prometheus_client.metrics_core import Metric
 
     from bentoml import Service
 
@@ -114,7 +120,7 @@ def test_send_usage_failure(
     analytics.track(event_properties)
     assert mock_do_not_track.called
     assert mock_post.called
-    mock_logger.debug.assert_called_with("Tracking Error: something went wrong")
+    mock_logger.debug.assert_called_with("Tracking Error: %s", mock_post.side_effect)
 
 
 @patch("bentoml._internal.utils.analytics.usage_stats.requests.post")
@@ -126,7 +132,7 @@ def test_track_serve_init(
     mock_usage_event_debugging: MagicMock,
     mock_do_not_track: MagicMock,
     mock_post: MagicMock,
-    noop_service: Service,
+    simple_service: Service,
     production: bool,
     caplog: LogCaptureFixture,
 ):
@@ -139,9 +145,10 @@ def test_track_serve_init(
     mock_response.text = "sent"
 
     analytics.usage_stats._track_serve_init(  # type: ignore (private warning)
-        noop_service,
+        simple_service,
         production=production,
         serve_info=analytics.usage_stats.get_serve_info(),
+        serve_kind="http",
     )
 
     assert mock_do_not_track.called
@@ -150,9 +157,10 @@ def test_track_serve_init(
     mock_usage_event_debugging.return_value = True
     with caplog.at_level(logging.INFO):
         analytics.usage_stats._track_serve_init(  # type: ignore (private warning)
-            noop_service,
+            simple_service,
             production=production,
             serve_info=analytics.usage_stats.get_serve_info(),
+            serve_kind="http",
         )
     assert "model_types" in caplog.text
 
@@ -176,31 +184,46 @@ def test_track_serve_init_no_bento(
             bentoml.Service("test"),
             production=False,
             serve_info=analytics.usage_stats.get_serve_info(),
+            serve_kind="http",
         )
     assert "model_types" not in caplog.text
 
 
 @patch("bentoml._internal.server.metrics.prometheus.PrometheusClient")
 @pytest.mark.parametrize(
-    "mock_output",
+    "mock_output,expected",
     [
-        b"",
-        b"""# HELP BENTOML_noop_request_total Multiprocess metric""",
+        (b"", []),
+        (
+            b"""# HELP BENTOML_noop_request_total Multiprocess metric""",
+            [],
+        ),
     ],
 )
-def test_get_metrics_report_filtered(
-    mock_prometheus_client: MagicMock, mock_output: bytes
+@pytest.mark.parametrize("serve_kind", ["grpc", "http"])
+def test_filter_metrics_report(
+    mock_prometheus_client: MagicMock,
+    mock_output: bytes,
+    expected: tuple[list[t.Any], bool | None],
+    serve_kind: str,
 ):
     mock_prometheus_client.multiproc.return_value = False
     mock_prometheus_client.generate_latest.return_value = mock_output
-    assert analytics.usage_stats.get_metrics_report(mock_prometheus_client) == []
+    assert (
+        analytics.usage_stats.get_metrics_report(
+            mock_prometheus_client, serve_kind=serve_kind
+        )
+        == expected
+    )
 
 
 @patch("bentoml._internal.utils.analytics.usage_stats.do_not_track")
-def test_track_serve_do_not_track(mock_do_not_track: MagicMock, noop_service: Service):
+def test_track_serve_do_not_track(
+    mock_do_not_track: MagicMock, simple_service: Service
+):
     mock_do_not_track.return_value = True
     with analytics.track_serve(
-        noop_service,
+        simple_service,
         production=False,
         serve_info=analytics.usage_stats.get_serve_info(),
     ) as output:
@@ -212,38 +235,90 @@ def test_track_serve_do_not_track(mock_do_not_track: MagicMock, noop_service: Se
 
 @patch("bentoml._internal.utils.analytics.usage_stats.do_not_track")
 @patch("bentoml._internal.server.metrics.prometheus.PrometheusClient")
-def test_get_metrics_report(
+def test_legacy_get_metrics_report(
     mock_prometheus_client: MagicMock,
     mock_do_not_track: MagicMock,
-    noop_service: Service,
+    simple_service: Service,
 ):
     mock_do_not_track.return_value = True
     mock_prometheus_client.multiproc.return_value = False
-    mock_prometheus_client.generate_latest.return_value = b"""\
-# HELP BENTOML_noop_request_total Multiprocess metric
-# TYPE BENTOML_noop_request_total counter
-BENTOML_noop_request_total{endpoint="/docs.json",http_response_code="200",service_version=""} 2.0
-BENTOML_noop_request_total{endpoint="/classify",http_response_code="200",service_version=""} 9.0
-BENTOML_noop_request_total{endpoint="/",http_response_code="200",service_version=""} 1.0
-# HELP BENTOML_noop_request_in_progress Multiprocess metric
-# TYPE BENTOML_noop_request_in_progress gauge
-BENTOML_noop_request_in_progress{endpoint="/",service_version=""} 0.0
-BENTOML_noop_request_in_progress{endpoint="/docs.json",service_version=""} 0.0
-BENTOML_noop_request_in_progress{endpoint="/classify",service_version=""} 0.0
-# HELP BENTOML_noop_request_duration_seconds Multiprocess metric
-# TYPE BENTOML_noop_request_duration_seconds histogram
-            """
-    output = analytics.usage_stats.get_metrics_report(mock_prometheus_client)
+    mock_prometheus_client.text_string_to_metric_families.return_value = text_string_to_metric_families(
+        b"""\
+# HELP BENTOML_simple_service_request_in_progress Multiprocess metric
+# TYPE BENTOML_simple_service_request_in_progress gauge
+BENTOML_simple_service_request_in_progress{endpoint="/predict",service_version="not available"} 0.0
+# HELP BENTOML_simple_service_request_total Multiprocess metric
+# TYPE BENTOML_simple_service_request_total counter
+BENTOML_simple_service_request_total{endpoint="/predict",http_response_code="200",service_version="not available"} 8.0
+""".decode(
+            "utf-8"
+        )
+    )
+    output = analytics.usage_stats.get_metrics_report(
+        mock_prometheus_client, serve_kind="http"
+    )
     assert {
-        "endpoint": "/classify",
+        "endpoint": "/predict",
         "http_response_code": "200",
-        "service_version": "",
-        "value": 9.0,
+        "service_version": "not available",
+        "value": 8.0,
     } in output
 
     endpoints = [filtered["endpoint"] for filtered in output]
 
     assert not any(x in endpoints for x in analytics.usage_stats.EXCLUDE_PATHS)
+
+
+@patch("bentoml._internal.server.metrics.prometheus.PrometheusClient")
+@pytest.mark.parametrize(
+    "serve_kind,expected",
+    [
+        (
+            "grpc",
+            {
+                "api_name": "pred_json",
+                "http_response_code": "200",
+                "service_name": "simple_service",
+                "service_version": "not available",
+                "value": 15.0,
+            },
+        ),
+        ("http", None),
+    ],
+)
+@pytest.mark.parametrize(
+    "generated_metrics",
+    [
+        text_string_to_metric_families(
+            b"""\
+                # HELP bentoml_api_server_request_total Multiprocess metric
+                # TYPE bentoml_api_server_request_total counter
+                bentoml_api_server_request_total{api_name="pred_json",http_response_code="200",service_name="simple_service",service_version="not available"} 15.0
+                # HELP bentoml_api_server_request_in_progress Multiprocess metric
+                # TYPE bentoml_api_server_request_in_progress gauge
+                bentoml_api_server_request_in_progress{api_name="pred_json",service_name="simple_service",service_version="not available"} 0.0
+                """.decode(
+                "utf-8"
+            )
+        )
+    ],
+)
+def test_get_metrics_report(
+    mock_prometheus_client: MagicMock,
+    simple_service: Service,
+    serve_kind: str,
+    expected: dict[str, str | float] | None,
+    generated_metrics: t.Generator[Metric, None, None],
+):
+    mock_prometheus_client.multiproc.return_value = False
+    mock_prometheus_client.text_string_to_metric_families.return_value = (
+        generated_metrics
+    )
+    output = analytics.usage_stats.get_metrics_report(
+        mock_prometheus_client, serve_kind=serve_kind
+    )
+    if expected:
+        assert expected in output
 
 
 @patch("bentoml._internal.utils.analytics.usage_stats.do_not_track")
@@ -258,7 +333,7 @@ def test_track_serve(
     mock_track_serve_init: MagicMock,
     mock_post: MagicMock,
     mock_do_not_track: MagicMock,
-    noop_service: Service,
+    simple_service: Service,
     monkeypatch: MonkeyPatch,
     caplog: LogCaptureFixture,
 ):
@@ -271,7 +346,7 @@ def test_track_serve(
 
     with caplog.at_level(logging.INFO):
         with analytics.track_serve(
-            noop_service,
+            simple_service,
             production=False,
             metrics_client=mock_prometheus_client,
             serve_info=analytics.usage_stats.get_serve_info(),

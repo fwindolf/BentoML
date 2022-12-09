@@ -59,7 +59,7 @@ To verify that the saved learner can be loaded properly:
 
 
 Building a Service using CatBoost
---------------------------------
+---------------------------------
 
 .. seealso::
 
@@ -79,9 +79,9 @@ Building a Service using CatBoost
 
 
    @svc.api(input=NumpyNdarray(), output=NumpyNdarray())
-   def classify_cancer(input: np.ndarray) -> np.ndarray:
+   async def classify_cancer(input: np.ndarray) -> np.ndarray:
       # returns sentiment score of a given text
-      res = runner.predict.run(input)
+      res = await runner.predict.async_run(input)
       return res
 
 
@@ -138,7 +138,7 @@ Using GPU
 
 CatBoost Runners will automatically use ``task_type=GPU`` if a GPU is detected.
 
-This behavior can be disabled using the :ref:`BentoML configuration file<guides/configuration:Configuring BentoML>`:
+This behavior can be disabled using the :ref:`BentoML configuration file<guides/configuration:Configuration>`:
 
 access:
 

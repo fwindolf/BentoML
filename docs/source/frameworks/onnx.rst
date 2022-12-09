@@ -75,7 +75,7 @@ Converting model frameworks to ONNX format
 		 init.orthogonal_(self.conv3.weight, init.calculate_gain('relu'))
 		 init.orthogonal_(self.conv4.weight)
 
-	 torch_model = SuperResolutionNet()
+	 torch_model = SuperResolutionNet(upscale_factor=3)
 
       For this tutorial, we will use pre-trained weights provided by the PyTorch team. Note that the model was only partially trained and being used for demonstration purposes.
 
@@ -285,7 +285,19 @@ This means by default, BentoML's :ref:`guides/batching:Adaptive Batching` is dis
 If you want to enable adaptive batching, provide a signature similar to the
 aboved example.
 
-Refers to :ref:`concepts/model:Model Signatures` and :ref:`Batching behaviour <concepts/model:Batching>` for more information.
+Refer to :ref:`concepts/model:Model Signatures` and :ref:`Batching behaviour <concepts/model:Batching>` for more information.
+
+.. note::
+
+   BentoML internally use `onnxruntime.InferenceSession
+   <https://onnxruntime.ai/docs/api/python/api_summary.html#inferencesession>`_
+   to run inference. When the original model is converted to ONNX
+   format and loaded by ``onnxruntime.InferenceSession``, the
+   inference method of the original model is converted to the ``run``
+   method of the ``onnxruntime.InferenceSession``. ``signatures`` in
+   above codes refers to the predict method of
+   ``onnxruntime.InferenceSession``, hence the only allowed method
+   name in ``signatures`` is ``run``.
 
 
 Building a Service for **ONNX**
@@ -318,12 +330,12 @@ Building a Service for **ONNX**
 	 # for output, we set image io descriptor's pilmode to "L" to denote
 	 # the output is a gray scale image
 	 @svc.api(input=Image(), output=Image(pilmode="L"))
-	 def sr(img) -> np.ndarray:
+	 async def sr(img) -> np.ndarray:
 	     img = img.resize((224, 224))
 	     gray_img = ImageOps.grayscale(img)
 	     arr = np.array(gray_img) / 255.0  # convert from 0-255 range to 0.0-1.0 range
 	     arr = np.expand_dims(arr, (0, 1))  # add batch_size, color_channel dims
-	     sr_arr = runner.run.run(arr)
+	     sr_arr = await runner.run.async_run(arr)
 	     sr_arr = np.squeeze(sr_arr)  # remove batch_size, color_channel dims
 	     sr_arr = np.uint8(sr_arr * 255)
 	     return sr_arr
@@ -346,7 +358,7 @@ Building a Service for **ONNX**
 	 svc = bentoml.Service("onnx_resnet50", runners=[runner])
 
 	 @svc.api(input=Image(), output=JSON())
-	 def predict(img):
+	 async def predict(img):
 
 	     from tensorflow.keras.applications.resnet50 import preprocess_input, decode_predictions
 
@@ -354,7 +366,7 @@ Building a Service for **ONNX**
 	     arr = np.array(img)
 	     arr = np.expand_dims(arr, axis=0)
 	     arr = preprocess_input(arr)
-	     preds = runner.run.run(arr)
+	     preds = await runner.run.async_run(arr)
 	     return decode_predictions(preds, top=1)[0]
 
 
@@ -374,16 +386,16 @@ Building a Service for **ONNX**
 	 svc = bentoml.Service("onnx_iris", runners=[runner])
 
 	 @svc.api(input=NumpyNdarray(), output=JSON())
-	 def classify(input_array):
-	     return runner.run.run(input_array)
+	 async def classify(input_array):
+	     return await runner.run.async_run(input_array)
 
 
 .. note::
 
-   In the aboved example, notice there are two :code:`run` in ``runner.run.run(input_data)`` inside inference code. The distinction between the two ``run`` are as follow:
+   In the aboved example, notice there are both ``run`` and ``async_run``  in ``runner.run.async_run(input_data)`` inside inference code. The distinction between ``run`` and ``async_run`` is as follow:
 
-   1.  The first ``run`` refers  to `onnxruntime.InferenceSession <https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/core/session/inference_session.cc>`_'s ``run`` method, which is ONNX Runtime API to run `inference <https://onnxruntime.ai/docs/api/python/api_summary.html#data-inputs-and-outputs>`_.
-   2. The second ``run`` refers to BentoML's runner inference API for invoking a model's signature. In the case of ONNX, it happens to have the same name as the ``InferenceSession`` endpoint.
+   1.  The ``run`` refers  to `onnxruntime.InferenceSession <https://github.com/microsoft/onnxruntime/blob/master/onnxruntime/core/session/inference_session.cc>`_'s ``run`` method, which is ONNX Runtime API to run `inference <https://onnxruntime.ai/docs/api/python/api_summary.html#data-inputs-and-outputs>`_.
+   2. The ``async_run`` refers to BentoML's runner inference API for invoking a model's signature. In the case of ONNX, it happens to have a similar name like the ``InferenceSession`` endpoint.
 
 
 When constructing a :ref:`bentofile.yaml <concepts/bento:Bento Build

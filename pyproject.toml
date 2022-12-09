@@ -1,17 +1,219 @@
 [build-system]
-requires = [
-  # sync with setup.py until we discard non-pep-517/518
-  "wheel",
-  "setuptools>=59.0",
-  "setuptools-scm[toml]>=6.2.3",
-]
+requires = ["setuptools>=63", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "bentoml"
+description = "BentoML: The Unified Model Serving Framework"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.7"
+keywords = ["MLOps", "AI", "BentoML", "Model Serving", "Model Deployment"]
+license = { text = "Apache-2.0" }
+authors = [{ name = "BentoML Team", email = "contact@bentoml.com" }]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries",
+]
+dependencies = [
+  "Jinja2>=3.0.1",
+  "PyYAML>=5.0",
+  "aiohttp",
+  "attrs>=21.1.0",
+  "cattrs>=22.1.0",
+  "circus>=0.17.0,!=0.17.2",
+  "click>=7.0",
+  "click-option-group",
+  "cloudpickle",
+  "deepmerge",
+  "fs",
+  "numpy",
+  # OpenTelemetry is the server dependencies, rather than SDK
+  # Since there are discrepancies among API and instrumentation packages,
+  # we should always pin the set version of Opentelemetry suite
+  "opentelemetry-api==1.14.0",
+  "opentelemetry-sdk==1.14.0",
+  "opentelemetry-exporter-otlp-proto-http==1.14.0",
+  "opentelemetry-instrumentation==0.35b0",
+  "opentelemetry-instrumentation-aiohttp-client==0.35b0",
+  "opentelemetry-instrumentation-asgi==0.35b0",
+  "opentelemetry-semantic-conventions==0.35b0",
+  "opentelemetry-util-http==0.35b0",
+  "packaging>=20.0,<22",
+  "pathspec",
+  "pip-tools>=6.6.2",
+  "pip-requirements-parser>=31.2.0",
+  "prometheus-client>=0.10.0",
+  "psutil",
+  "pynvml<12",
+  "python-dateutil",
+  "python-multipart",
+  "python-json-logger",
+  "requests",
+  "rich>=11.2.0",
+  "schema",
+  "simple-di>=0.1.4",
+  "starlette",
+  "uvicorn",
+  "watchfiles>=0.15.0",
+  "backports.cached-property;python_version<'3.8'",
+  "backports.shutil_copytree;python_version<'3.8'",
+  "importlib-metadata;python_version<'3.8'",
+  "singledispatchmethod;python_version<'3.8'",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Documentation" = "https://docs.bentoml.org/en/latest/"
+"Bug Reports" = "https://github.com/bentoml/BentoML/issues"
+"BentoML Community Slack" = "https://bit.ly/2N5IpbB"
+"BentoML Official Blog" = "https://modelserving.com"
+"BentoML Twitter" = "https://twitter.com/bentomlai"
+
+[project.scripts]
+bentoml = "bentoml_cli.cli:cli"
+
+[tool.setuptools.package-data]
+bentoml = ["bentoml/*"]
+bentoml_cli = ["bentoml_cli/*"]
+
+[tool.setuptools.exclude-package-data]
+"*" = [
+  ".git*",
+  ".bazel*",
+  "BUILD.bazel",
+  "WORKSPACE",
+  "*.md",
+  "Makefile",
+  "*.py[cod]",
+  "typings",
+]
+bentoml = ["grpc/buf.yaml", "_internal/frameworks/FRAMEWORK_TEMPLATE_PY"]
+bentoml_cli = ["worker/README.md"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = [
+  # include bentoml packages
+  "bentoml",
+  "bentoml.grpc*",
+  "bentoml.testing*",
+  "bentoml._internal*",
+  # include bentoml_cli packages
+  "bentoml_cli",
+  "bentoml_cli.worker",
+]
+
+[project.optional-dependencies]
+all = [
+  "bentoml[aws]",
+  "bentoml[io]",
+  "bentoml[grpc]",
+  "bentoml[grpc-reflection]",
+  "bentoml[grpc-channelz]",
+  "bentoml[tracing]",
+]
+aws = ["fs-s3fs"]
+io = [
+  "bentoml[io-json]",
+  "bentoml[io-image]",
+  "bentoml[io-pandas]",
+  "bentoml[io-file]",
+] # syntatic sugar for bentoml[io-json,io-image,io-pandas,io-file]
+io-file = ["filetype"] # Currently use for from_sample
+io-json = ["pydantic<2"] # currently we don't have support for pydantic 2.0
+io-image = ["bentoml[io-file]", "Pillow"]
+io-pandas = ["pandas", "pyarrow"]
+grpc = [
+  # Restrict maximum version due to breaking protobuf 4.21.0 changes
+  # (see https://github.com/protocolbuffers/protobuf/issues/10051)
+  # 3.19.5 is currently breaking on a lot of system.
+  "protobuf>=3.5.0, <3.20, !=3.19.5",
+  # Lowest version that support 3.10. We need to set an upper bound
+  # We can't use 1.48.2 since it depends on 3.19.5
+  "grpcio>=1.41.0,!=1.48.2",
+  # grpcio>=1.48.0 provides a pre-built M1 wheel.
+  "grpcio>=1.48.0,!=1.48.2;platform_machine=='arm64' and platform_system=='Darwin'",
+  "grpcio-health-checking>=1.41.0,!=1.48.2",
+  "opentelemetry-instrumentation-grpc==0.35b0",
+]
+grpc-reflection = ["bentoml[grpc]", "grpcio-reflection>=1.41.0,!=1.48.2"]
+grpc-channelz = ["bentoml[grpc]", "grpcio-channelz>=1.41.0,!=1.48.2"]
+# We kept for compatibility with previous
+# versions of BentoML. It is discouraged to use this, instead use any
+# of the above tracing.* extras.
+tracing = [
+  "bentoml[tracing-jaeger]",
+  "bentoml[tracing-otlp]",
+  "bentoml[tracing-zipkin]",
+]
+tracing-jaeger = ["opentelemetry-exporter-jaeger==1.14.0"]
+tracing-zipkin = ["opentelemetry-exporter-zipkin==1.14.0"]
+tracing-otlp = ["opentelemetry-exporter-otlp==1.14.0"]
+
 [tool.setuptools_scm]
-write_to = "bentoml/_version.py"
+write_to = "src/bentoml/_version.py"
 git_describe_command = "git describe --dirty --tags --long --first-parent"
 version_scheme = "post-release"
 fallback_version = "0.0.0"
+
+[tool.coverage.paths]
+source = ["src"]
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["src/bentoml/"]
+omit = [
+  "src/bentoml/__main__.py",
+  "src/bentoml/io.py",
+  "src/bentoml/serve.py",
+  "src/bentoml/start.py",
+  "src/bentoml/_internal/types.py",
+  "src/bentoml/testing/*",
+  "src/bentoml/grpc/v1alpha1/*",
+  "src/bentoml/grpc/v1/*",
+  "src/bentoml/_internal/external_typing/*",
+  "src/bentoml/_internal/yatai_client/*",
+  "src/bentoml/_internal/yatai_rest_api_client/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+omit = [
+  'src/bentoml/__main__.py',
+  "src/bentoml/io.py",
+  "src/bentoml/serve.py",
+  "src/bentoml/start.py",
+  "src/bentoml/_internal/types.py",
+  "src/bentoml/testing/*",
+  "src/bentoml/grpc/v1alpha1/*",
+  "src/bentoml/grpc/v1/*",
+  "src/bentoml/_internal/external_typing/*",
+  "src/bentoml/_internal/yatai_client/*",
+  "src/bentoml/_internal/yatai_rest_api_client/*",
+]
+exclude_lines = [
+  "\\#\\s*pragma: no cover",
+  "^\\s*def __repr__",
+  "^\\s*raise AssertionError",
+  "^\\s*raise NotImplementedError",
+  "^\\s*raise MissingDependencyException",
+  "^\\s*except ImportError",
+  "if __name__ == .__main__.:",
+  "^\\s*if TYPE_CHECKING:",
+  "^\\s*@(t\\.)?overload( |$)",
+  "@(abc\\.)?abstractmethod",
+]
 
 [tool.black]
 line-length = 88
@@ -23,104 +225,109 @@ exclude = '''
     | \.tox
     | \.venv
     | _build
+    | .build
+    | bazel-*
     | build
+    | venv
+    | lib
     | dist
     | typings
+    | src/bentoml/grpc/v1alpha1
+    | src/bentoml/grpc/v1
+    | tests/proto
+    | grpc-client/thirdparty
+    | grpc-client/bentoml
   )/
-  | bentoml/_version.py
+  | src/bentoml/_version.py
 )
 '''
 
 [tool.pytest.ini_options]
-addopts = "-rfEX -p pytester -p no:warnings"
-python_files = ["test_*.py","*_test.py"]
+addopts = ["-rfEX", "-pbentoml.testing.pytest.plugin"]
+python_files = ["test_*.py", "*_test.py"]
 testpaths = ["tests"]
-markers = ["gpus"]
 
-[tool.pylint.master]
-ignore=".ipynb_checkpoints,typings,bentoml/_internal/external_typing"
-ignore-paths=".*.pyi"
-unsafe-load-any-extension="no"
-extension-pkg-whitelist="numpy,tensorflow,torch,paddle,keras,pydantic"
-jobs=4
-persistent="yes"
-suggestion-mode="yes"
-max-line-length=88
-
-[tool.pylint.messages_control]
-disable="import-error,print-statement,parameter-unpacking,unpacking-in-except,old-raise-syntax,backtick,import-star-module-level,raw-checker-failed,bad-inline-option,locally-disabled,file-ignored,suppressed-message,useless-suppression,deprecated-pragma,apply-builtin,basestring-builtin,buffer-builtin,cmp-builtin,coerce-builtin,execfile-builtin,file-builtin,long-builtin,raw_input-builtin,reduce-builtin,standarderror-builtin,unicode-builtin,xrange-builtin,coerce-method,delslice-method,getslice-method,setslice-method,no-absolute-import,old-division,dict-iter-method,dict-view-method,next-method-called,metaclass-assignment,indexing-exception,raising-string,reload-builtin,oct-method,hex-method,nonzero-method,cmp-method,input-builtin,round-builtin,intern-builtin,unichr-builtin,map-builtin-not-iterating,zip-builtin-not-iterating,range-builtin-not-iterating,filter-builtin-not-iterating,using-cmp-argument,div-method,idiv-method,rdiv-method,exception-message-attribute,invalid-str-codec,sys-max-int,bad-python3-import,deprecated-string-function,deprecated-str-translate-call,deprecated-itertools-function,deprecated-types-field,next-method-defined,dict-items-not-iterating,dict-keys-not-iterating,dict-values-not-iterating,deprecated-operator-function,deprecated-urllib-function,xreadlines-attribute,deprecated-sys-function,exception-escape,comprehension-escape,logging-fstring-interpolation,logging-format-interpolation,logging-not-lazy,C,R,fixme,protected-access,no-member,unsubscriptable-object,raise-missing-from,isinstance-second-argument-not-valid-type"
-enable="c-extension-no-member"
-
-[tool.pylint.reports]
-evaluation="10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
-msg-template="{msg_id}:{symbol} [{line:0>3d}:{column:0>2d}] {obj}: {msg}"
-output-format="colorized"
-reports="no"
-score="yes"
-
-[tool.pylint.refactoring]
-max-nested-blocks=5
-never-returning-functions="optparse.Values,sys.exit"
-
-[tool.pylint.miscellaneous]
-notes="FIXME,XXX,TODO,NOTE"
-
-[tool.pylint.typecheck]
-ignored-classes="Namespace"
-contextmanager-decorators="contextlib.contextmanager"
-
-[tool.pylint.format]
-indent-after-paren=4
-indent-string='    '
-max-line-length=100
-max-module-lines=1000
-single-line-class-stmt="no"
-single-line-if-stmt="no"
-
-[tool.pylint.imports]
-allow-wildcard-with-all="no"
-analyse-fallback-blocks="no"
+[tool.pylint.main]
+recursive = true
+extension-pkg-allow-list = [
+  "numpy",
+  "tensorflow",
+  "torch",
+  "paddle",
+  "onnxruntime",
+  "onnx",
+  "pydantic.schema",
+]
+ignore-paths = [
+  "src/bentoml/_internal/external_typing",
+  "src/bentoml/grpc/v1alpha1",
+  "src/bentoml/grpc/v1",
+]
+disable = ["coerce-builtin", "no-absolute-import", "C", "R"]
+enable = ["c-extension-no-member"]
+evaluation = "10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
+msg-template = "{msg_id}:{symbol} [{line:0>3d}:{column:0>2d}] {obj}: {msg}"
+output-format = "colorized"
+score = true
 
 [tool.pylint.classes]
-defining-attr-methods="__init__,__new__,setUp"
-exclude-protected="_asdict,_fields,_replace,_source,_make"
-valid-classmethod-first-arg="cls"
-valid-metaclass-classmethod-first-arg="mcs"
+valid-metaclass-classmethod-first-arg = ["cls", "mcls", "kls"]
 
-[tool.pylint.design]
-# Maximum number of arguments for function / method
-max-args=5
-# Maximum number of attributes for a class (see R0902).
-max-attributes=7
-# Maximum number of boolean expressions in a if statement
-max-bool-expr=5
-# Maximum number of branch for function / method body
-max-branches=12
-# Maximum number of locals for function / method body
-max-locals=15
-# Maximum number of parents for a class (see R0901).
-max-parents=7
-# Maximum number of public methods for a class (see R0904).
-max-public-methods=20
-# Maximum number of return / yield for function / method body
-max-returns=6
-# Maximum number of statements in function / method body
-max-statements=50
-# Minimum number of public methods for a class (see R0903).
-min-public-methods=2
+[tool.pylint.logging]
+logging-format-style = "old" # using %s formatter for logging (performance-related)
+
+[tool.pylint.miscellaneous]
+notes = ["FIXME", "XXX", "TODO", "NOTE", "WARNING"]
+
+[tool.pylint.refactoring]
+# specify functions that should not return
+never-returning-functions = ["sys.exit"]
+
+[tool.pylint.spelling]
+spelling-ignore-comment-directives = "fmt: on,fmt: off,noqa:,noqa,nosec,isort:skip,mypy:,pylint:,type:"
+
+[tool.pylint.variables]
+init-import = true
+
+[tool.pylint.typecheck]
+contextmanager-decorators = [
+  "contextlib.contextmanager",
+  "bentoml._internal.utils.cached_contextmanager",
+]
 
 [tool.isort]
 profile = "black"
+line_length = 88
 length_sort = true
 force_single_line = true
 order_by_type = true
+known_first_party = "bentoml"
 force_alphabetical_sort_within_sections = true
-skip_glob = ["typings/*", "docs/*"]
+skip_glob = [
+  "typings/*",
+  "test/*",
+  "**/*_pb2.py*",
+  "**/*_pb2_grpc.py*",
+  "venv/*",
+  "lib/*",
+  "grpc-client/thirdparty",
+  "grpc-client/bentoml",
+  "bazel-*",
+]
 
 [tool.pyright]
-pythonVersion = "3.10"
-include = ["bentoml"]
-exclude = ['bentoml/_version.py','bentoml/__main__.py']
+pythonVersion = "3.11"
+include = ["src/", "examples/", "tests/"]
+exclude = [
+  'src/bentoml/_version.py',
+  'src/bentoml/__main__.py',
+  'src/bentoml/_internal/external_typing/',
+  'src/**/*_pb2.py*',
+  "src/**/*_pb2_grpc.py*",
+  "grpc-client/thirdparty",
+  "test/proto",
+  "bazel-*",
+]
 analysis.useLibraryCodeForTypes = true
 strictListInference = true
 strictDictionaryInference = true

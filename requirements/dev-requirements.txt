@@ -1,5 +1,6 @@
 # Dev dependencies
+-e .[all]
 -r tests-requirements.txt
-setup-cfg-fmt
+-r docs-requirements.txt
 twine
 wheel

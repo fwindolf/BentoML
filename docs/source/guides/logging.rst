@@ -1,6 +1,6 @@
-=================
-Customize Logging
-=================
+=======
+Logging
+=======
 
 Server Logging
 --------------
@@ -59,13 +59,14 @@ logs are logged under the ``"bentoml"`` namespace.
 Web Service Request Logging
 """""""""""""""""""""""""""
 
-For web requests, logging can be enabled and disabled using the `logging.access` parameter at the
+For web requests, logging can be enabled and disabled using the `api_server.logging.access` parameter at the
 top level of the ``bentoml_configuration.yml``.
 
 .. code-block:: yaml
 
-    logging:
-      access:
+    api_server:
+      logging:
+        access:
           enabled: False
           # whether to log the size of the request body
           request_content_length: True
@@ -88,13 +89,31 @@ your ``bentoml_configuration.yml``:
 .. code-block:: yaml
 
     runners:
-        logging:
-          access:
-              enabled: True
-              ...
+      logging:
+        access:
+          enabled: True
+          ...
 
 The available configuration options are identical to the webserver request logging options above.
 These logs are disabled by default in order to prevent double logging of requests.
+
+
+Access Logging Format
+"""""""""""""""""""""
+
+You may configure the format of the Trace and Span IDs in the access logs in ``bentoml_configuration.yml``.
+The default configuration is shown below, where the opentelemetry ``trace_id`` and ``span_id`` are logged in
+hexadecimal format, consistent with opentelemetry logging instrumentation. You may also configure other format
+specs, such as decimal ``d``.
+
+.. code-block:: yaml
+
+    api_server:
+      logging:
+        access:
+          format:
+            trace_id: 032x
+            span_id: 016x
 
 
 Library Logging

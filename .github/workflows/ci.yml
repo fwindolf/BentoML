@@ -2,16 +2,20 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
   schedule:
     - cron: "0 0 * * 1/2"
 
 env:
-  BENTOML_DO_NOT_TRACK: True
   LINES: 120
   COLUMNS: 120
+  BENTOML_DO_NOT_TRACK: True
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#defaultsrun
+defaults:
+  run:
+    shell: bash --noprofile --norc -exo pipefail {0}
 
 jobs:
   diff:
@@ -20,6 +24,7 @@ jobs:
       related: ${{ steps.filter.outputs.related }}
       bentoml: ${{ steps.filter.outputs.bentoml }}
       docs: ${{ steps.filter.outputs.docs }}
+      protos: ${{ steps.filter.outputs.protos }}
     steps:
       - uses: actions/checkout@v3
       - uses: dorny/paths-filter@v2
@@ -30,14 +35,15 @@ jobs:
             related: &related
               - .github/workflows/ci.yml
               - codecov.yml
-              - setup.cfg
               - pyproject.toml
-              - scripts/ci/config.yml
-              - scripts/ci/run_tests.sh
               - requirements/tests-requirements.txt
+            protos: &protos
+              - "src/bentoml/grpc/**/*.proto"
             bentoml:
+              - *protos
               - *related
-              - "bentoml/**"
+              - "src/bentoml/**"
+              - "src/bentoml_cli/**"
               - "tests/**"
               - "examples/**"
             docs:
@@ -47,9 +53,6 @@ jobs:
 
   codestyle_check:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
     needs:
       - diff
 
@@ -61,7 +64,7 @@ jobs:
       - name: Setup python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.9
+          python-version: "3.10.6"
           architecture: x64
 
       - name: Get pip cache dir
@@ -69,13 +72,20 @@ jobs:
         run: |
           echo ::set-output name=dir::$(pip cache dir)
 
+      - name: Fetch origin
+        run: git fetch origin "$GITHUB_BASE_REF"
+
       - name: Setup node
         uses: actions/setup-node@v3
         with:
           node-version: "17"
-      - name: install pyright
+      - name: Install pyright
         run: |
           npm install -g npm@^7 pyright
+      - name: Setup bufbuild/buf
+        uses: bufbuild/buf-setup-action@v1.9.0
+        with:
+          github_token: ${{ github.token }}
 
       - name: Cache pip dependencies
         uses: actions/cache@v3
@@ -90,17 +100,20 @@ jobs:
           pip install -r requirements/dev-requirements.txt
 
       - name: Format check
-        run: make ci-format
+        run: |
+          black --check src examples tests
+          black --check --pyi typings
+          isort --check .
       - name: Lint check
-        run: make ci-lint
+        run: git diff --name-only --diff-filter=d "origin/$GITHUB_BASE_REF" -z -- '*.py' | xargs -0 --no-run-if-empty pylint --rcfile pyproject.toml --fail-under 9.0 --exit-zero
       - name: Type check
-        run: make ci-pyright
+        run: git diff --name-only --diff-filter=d "origin/$GITHUB_BASE_REF" -z -- '*.py[i]' | xargs -0 --no-run-if-empty pyright
+      - name: Proto check
+        if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.protos == 'true') || github.event_name == 'push' }}
+        run: |
+          buf lint --config "src/bentoml/grpc/buf.yaml" --error-format msvs src
 
   documentation_spelling_check:
-    defaults:
-      run:
-        shell: bash
-
     runs-on: ubuntu-latest
     needs:
       - diff
@@ -139,7 +152,6 @@ jobs:
 
       - name: Run spellcheck script
         run: make spellcheck-docs
-        shell: bash
 
   unit_tests:
     needs:
@@ -150,9 +162,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.7", "3.8", "3.9", "3.10"]
-    defaults:
-      run:
-        shell: bash
 
     if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.bentoml == 'true') || github.event_name == 'push' }}
     name: python${{ matrix.python-version }}_unit_tests (${{ matrix.os }})
@@ -183,27 +192,27 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install .
+          pip install ".[grpc]"
           pip install -r requirements/tests-requirements.txt
 
       - name: Run unit tests
-        if: ${{ matrix.os != 'windows-latest' }}
-        run: make tests-unit
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov=src/bentoml --cov-append)
+          if [ "${{ matrix.os }}" != 'windows-latest' ]; then
+            # we will use pytest-xdist to improve tests run-time.
+            OPTS=(${OPTS[@]} --dist loadfile -n auto --run-grpc-tests)
+          fi
+          # Now run the unit tests
+          coverage run -m pytest tests/unit "${OPTS[@]}"
 
-      - name: Run unit tests (Windows)
-        if: ${{ matrix.os == 'windows-latest' }}
-        run: make tests-unit
-        shell: bash
+      - name: Generage coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          name: codecov-${{ matrix.os }}-python${{ matrix.python-version }}
-          fail_ci_if_error: true
-          flags: unit-tests
-          directory: ./
-          files: ./unit.xml
-          verbose: true
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   bento_server_e2e_tests:
     needs:
@@ -214,12 +223,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python-version: ["3.7", "3.8", "3.9", "3.10"]
-    defaults:
-      run:
-        shell: bash
+        server_type: ["http", "grpc"]
+        exclude:
+          - os: windows-latest
+            server_type: "grpc"
 
     if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.bentoml == 'true') || github.event_name == 'push' }}
-    name: python${{ matrix.python-version }}_e2e_tests (${{ matrix.os }})
+    name: python${{ matrix.python-version }}_${{ matrix.server_type }}_e2e_tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
@@ -257,25 +267,31 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-      - name: Install dependencies
+      - name: Install dependencies for ${{ matrix.server_type }}-based tests.
         run: |
-          pip install -e .
           pip install -r requirements/tests-requirements.txt
-          pip install -r tests/e2e/bento_server_general_features/requirements.txt
+          if [ "${{ matrix.server_type }}" == 'grpc' ]; then
+            pip install -e ".[grpc]"
+          else
+            pip install -e .
+          fi
+          if [ -f "tests/e2e/bento_server_${{ matrix.server_type }}/requirements.txt" ]; then
+            pip install -r tests/e2e/bento_server_${{ matrix.server_type }}/requirements.txt
+          fi
 
-      - name: Export Action Envvar
-        run: export GITHUB_ACTION=true
+      - name: Run ${{ matrix.server_type }} tests and generate coverage report
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov=src/bentoml --cov-append)
+          coverage run -m pytest tests/e2e/bento_server_${{ matrix.server_type }} "${OPTS[@]}"
 
-      - name: Run tests and generate coverage report
-        run: ./scripts/ci/run_tests.sh general_features
+      - name: Generage coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          flags: e2e-tests
-          directory: ./
-          files: ./tests/e2e/bento_server_general_features/general_features.xml
-          verbose: true
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}

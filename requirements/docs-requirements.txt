@@ -1,7 +1,7 @@
 # Docs dependencies
 -r tests-requirements.txt
-setuptools>=62.0.0
-sphinx==4.5.0
+sphinx>=5
+setuptools>=63  # readthedocs doesn't support -r
 myst-parser
 sphinx-click>=3.0.2
 furo
@@ -15,3 +15,4 @@ sphinx-design
 pyenchant
 Jinja2>=3.1
 sphinx-autobuild
+sphinx-hoverxref

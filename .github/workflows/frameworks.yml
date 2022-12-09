@@ -2,49 +2,37 @@ name: Frameworks
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
-      - runners-1.0
+    branches: [main]
   schedule:
     - cron: "0 0 * * 1/2"
 
 env:
-  BENTOML_DO_NOT_TRACK: True
   LINES: 120
   COLUMNS: 120
+  BENTOML_DO_NOT_TRACK: True
+
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#defaultsrun
+defaults:
+  run:
+    shell: bash --noprofile --norc -exo pipefail {0}
 
 jobs:
   diff:
     runs-on: ubuntu-latest
     outputs:
-      dependencies: ${{ steps.filter.outputs.dependencies }}
       catboost: ${{ steps.filter.outputs.catboost }}
-      detectron2: ${{ steps.filter.outputs.detectron2 }}
-      easyocr: ${{ steps.filter.outputs.easyocr }}
-      evalml: ${{ steps.filter.outputs.evalml }}
       fastai: ${{ steps.filter.outputs.fastai }}
-      fasttext: ${{ steps.filter.outputs.fasttext }}
-      gluon: ${{ steps.filter.outputs.gluon }}
-      h2o: ${{ steps.filter.outputs.h2o }}
-      keras_tf2: ${{ steps.filter.outputs.keras_tf2 }}
+      keras: ${{ steps.filter.outputs.keras }}
       lightgbm: ${{ steps.filter.outputs.lightgbm }}
       mlflow: ${{ steps.filter.outputs.mlflow }}
       onnx: ${{ steps.filter.outputs.onnx }}
-      onnxmlir: ${{ steps.filter.outputs.onnxmlir }}
-      paddle: ${{ steps.filter.outputs.paddle }}
       picklable_model: ${{ steps.filter.outputs.picklable_model }}
-      pycaret: ${{ steps.filter.outputs.pycaret }}
-      pyspark_mllib: ${{ steps.filter.outputs.pyspark_mllib }}
       pytorch: ${{ steps.filter.outputs.pytorch }}
       pytorch_lightning: ${{ steps.filter.outputs.pytorch_lightning }}
       sklearn: ${{ steps.filter.outputs.sklearn }}
-      spacy: ${{ steps.filter.outputs.spacy }}
-      statsmodels: ${{ steps.filter.outputs.statsmodels}}
-      tf1: ${{ steps.filter.outputs.tf1 }}
-      tf2: ${{ steps.filter.outputs.tf2 }}
+      tensorflow: ${{ steps.filter.outputs.tensorflow }}
       torchscript: ${{ steps.filter.outputs.torchscript }}
       transformers: ${{ steps.filter.outputs.transformers }}
       xgboost: ${{ steps.filter.outputs.xgboost }}
@@ -54,172 +42,91 @@ jobs:
         id: filter
         with:
           filters: |
-            dependencies: &dependencies
-              - setup.cfg
-              - pyproject.toml
-              - scripts/ci/config.yml
-              - requirements/tests-requirements.txt
             related: &related
-              - *dependencies
               - codecov.yml
+              - pyproject.toml
+              - requirements/tests-requirements.txt
               - .github/workflows/frameworks.yml
-              - scripts/ci/run_tests.sh
+              - tests/integration/frameworks/conftest.py
               - tests/integration/frameworks/test_frameworks.py
-            runner: &runner
-              - *related
-              - bentoml/_internal/runner/**
-              - bentoml/_internal/models/**
+              - src/bentoml/_internal/runner/**
+              - src/bentoml/_internal/models/**
             catboost:
-              - *runner
-              - bentoml/catboost.py
-              - bentoml/_internal/frameworks/catboost.py
+              - *related
+              - src/bentoml/catboost.py
+              - src/bentoml/_internal/frameworks/catboost.py
               - tests/integration/frameworks/models/catboost.py
-              - tests/integration/frameworks/test_frameworks.py
-            detectron2:
-              - *runner
-              - bentoml/detectron.py
-              - bentoml/_internal/frameworks/detectron.py
-              - tests/integration/frameworks/test_detectron2_impl.py
-            easyocr:
-              - *runner
-              - bentoml/easyocr.py
-              - bentoml/_internal/frameworks/easyocr.py
-              - tests/integration/frameworks/test_easyocr_impl.py
-            evalml:
-              - *runner
-              - bentoml/evalml.py
-              - bentoml/_internal/frameworks/evalml.py
-              - tests/integration/frameworks/test_evalml_impl.py
-            fasttext:
-              - *runner
-              - bentoml/fasttext.py
-              - bentoml/_internal/frameworks/fasttext.py
-              - tests/integration/frameworks/test_fasttext_impl.py
-            gluon:
-              - *runner
-              - bentoml/gluon.py
-              - bentoml/_internal/frameworks/gluon.py
-              - tests/integration/frameworks/test_gluon_impl.py
-            h2o:
-              - *runner
-              - bentoml/h2o.py
-              - bentoml/_internal/frameworks/h2o.py
-              - tests/integration/frameworks/test_h2o_impl.py
             lightgbm:
-              - *runner
-              - bentoml/lightgbm.py
-              - bentoml/_internal/frameworks/lightgbm.py
+              - *related
+              - src/bentoml/lightgbm.py
+              - src/bentoml/_internal/frameworks/lightgbm.py
               - tests/integration/frameworks/models/lightgbm.py
-              - tests/integration/frameworks/test_frameworks.py
             mlflow:
-              - *runner
-              - bentoml/mlflow.py
-              - bentoml/_internal/frameworks/mlflow.py
+              - *related
+              - src/bentoml/mlflow.py
+              - src/bentoml/_internal/frameworks/mlflow.py
               - tests/integration/frameworks/mlflow
             fastai:
-              - *runner
-              - bentoml/fastai.py
-              - bentoml/_internal/frameworks/fastai.py
-              - bentoml/_internal/frameworks/common/pytorch.py
-              - tests/integration/frameworks/test_frameworks.py
+              - *related
+              - src/bentoml/fastai.py
+              - src/bentoml/_internal/frameworks/fastai.py
+              - src/bentoml/_internal/frameworks/common/pytorch.py
               - tests/integration/frameworks/test_fastai_unit.py
             onnx:
-              - *runner
-              - bentoml/onnx.py
-              - bentoml/_internal/frameworks/onnx.py
+              - *related
+              - src/bentoml/onnx.py
+              - src/bentoml/_internal/frameworks/onnx.py
               - tests/integration/frameworks/models/onnx.py
-              - tests/integration/frameworks/test_frameworks.py
-            onnxmlir:
-              - *runner
-              - bentoml/onnxmlir.py
-              - bentoml/_internal/frameworks/onnxmlir.py
-              - tests/integration/frameworks/test_onnxmlir_impl.py
-            paddle:
-              - *runner
-              - bentoml/paddle.py
-              - bentoml/_internal/frameworks/paddle.py
-              - tests/integration/frameworks/paddle
             picklable_model:
-              - *runner
-              - bentoml/picklable_model.py
-              - bentoml/_internal/frameworks/picklable_model.py
-              - tests/integration/frameworks/picklable_model
-            pycaret:
-              - *runner
-              - bentoml/pycaret.py
-              - bentoml/_internal/frameworks/pycaret.py
-              - tests/integration/frameworks/test_pycaret_impl.py
-            pyspark_mllib:
-              - *runner
-              - bentoml/pyspark.py
-              - bentoml/_internal/frameworks/pyspark.py
-              - tests/integration/frameworks/test_pyspark_impl.py
+              - *related
+              - src/bentoml/picklable_model.py
+              - src/bentoml/_internal/frameworks/picklable_model.py
+              - tests/integration/frameworks/models/picklable_model.py
             pytorch:
-              - *runner
-              - bentoml/pytorch.py
-              - bentoml/_internal/frameworks/common/pytorch.py
-              - bentoml/_internal/frameworks/pytorch.py
+              - *related
+              - src/bentoml/pytorch.py
+              - src/bentoml/_internal/frameworks/pytorch.py
+              - src/bentoml/_internal/frameworks/common/pytorch.py
               - tests/integration/frameworks/test_pytorch_unit.py
-              - tests/integration/frameworks/test_frameworks.py
             torchscript:
-              - *runner
-              - bentoml/torchscript.py
-              - bentoml/_internal/frameworks/common/pytorch.py
-              - bentoml/_internal/frameworks/torchscript.py
-              - tests/integration/frameworks/test_torchscript_impl.py
+              - *related
+              - src/bentoml/torchscript.py
+              - src/bentoml/_internal/frameworks/common/pytorch.py
+              - src/bentoml/_internal/frameworks/torchscript.py
             pytorch_lightning:
-              - *runner
-              - bentoml/pytorch.py
-              - bentoml/pytorch_lightning.py
-              - bentoml/_internal/frameworks/common/pytorch.py
-              - bentoml/_internal/frameworks/torchscript.py
-              - bentoml/_internal/frameworks/pytorch_lightning.py
-              - tests/integration/frameworks/test_pytorch_lightning_impl.py
+              - *related
+              - src/bentoml/pytorch.py
+              - src/bentoml/pytorch_lightning.py
+              - src/bentoml/_internal/frameworks/common/pytorch.py
+              - src/bentoml/_internal/frameworks/torchscript.py
+              - src/bentoml/_internal/frameworks/pytorch_lightning.py
             sklearn:
-              - *runner
-              - bentoml/sklearn.py
-              - bentoml/_internal/frameworks/sklearn.py
-              - tests/integration/frameworks/test_sklearn_impl.py
-            spacy:
-              - *runner
-              - bentoml/spacy.py
-              - bentoml/_internal/frameworks/spacy.py
-              - tests/integration/frameworks/spacy
-            statsmodels:
-              - *runner
-              - bentoml/statsmodels.py
-              - bentoml/_internal/frameworks/statsmodels.py
-              - tests/integration/frameworks/test_statsmodels_impl.py
-            tf1: &tf1
-              - *runner
-              - bentoml/tensorflow.py
-              - bentoml/_internal/frameworks/tensorflow_v1.py
-              - tests/integration/frameworks/test_tensorflow_v1_impl.py
-            tf2: &tf2
-              - *runner
-              - bentoml/tensorflow.py
-              - bentoml/_internal/frameworks/tensorflow_v2.py
-              - tests/integration/frameworks/models/tensorflow_v2.py
-              - tests/integration/frameworks/tensorflow_v2_unit.py
-            keras_tf2:
-              - *runner
-              - *tf2
-              - bentoml/keras.py
-              - bentoml/_internal/frameworks/keras.py
+              - *related
+              - src/bentoml/sklearn.py
+              - src/bentoml/_internal/frameworks/sklearn.py
+              - tests/integration/frameworks/models/sklearn.py
+            tensorflow: &tensorflow
+              - *related
+              - src/bentoml/tensorflow.py
+              - src/bentoml/_internal/frameworks/tensorflow_v2.py
+              - tests/integration/frameworks/models/tensorflow.py
+              - tests/integration/frameworks/test_tensorflow_unit.py
+            keras:
+              - *related
+              - *tensorflow
+              - src/bentoml/keras.py
+              - src/bentoml/_internal/frameworks/keras.py
               - tests/integration/frameworks/models/keras.py
-              - tests/integration/frameworks/test_frameworks.py
             transformers:
-              - *runner
-              - bentoml/transformers.py
-              - bentoml/_internal/frameworks/transformers.py
-              - tests/integration/frameworks/test_transformers_impl.py
+              - *related
+              - src/bentoml/transformers.py
+              - src/bentoml/_internal/frameworks/transformers.py
+              - tests/integration/frameworks/test_transformers_unit.py
             xgboost:
-              - *runner
-              - bentoml/xgboost.py
-              - bentoml/_internal/frameworks/xgboost.py
+              - *related
+              - src/bentoml/xgboost.py
+              - src/bentoml/_internal/frameworks/xgboost.py
               - tests/integration/frameworks/models/xgboost.py
-              - tests/integration/frameworks/test_frameworks.py
-
 
   catboost_integration_tests:
     needs: diff
@@ -246,119 +153,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install catboost
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-catboost
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework catboost)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.catboost == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./catboost.xml
-          flags: catboost
-          verbose: true
-
-  detectron2_integration_tests:
-    needs: diff
-    if: ${{ false }}
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.detectron2 == 'true') || github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-detectron2
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.detectron2 == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./detectron2.xml
-          flags: detectron
-          verbose: true
-
-  easyocr_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.easyocr == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-easyocr
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.easyocr == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./easyocr.xml
-          flags: easyocr
-          verbose: true
-
-  # TODO: evalml_integration_tests:
-  # TODO: fasttext_integration_tests
-
-  # TODO(aarnphm): add Trax/Flax support
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   fastai_integration_tests:
     needs: diff
@@ -385,172 +198,29 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install fastai "torch<1.12" torchvision pandas scikit-learn
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-fastai
-        shell: bash
-
-      - name: Run unit test for fastai
-        shell: bash
         run: |
-          OPTS=(--cov=bentoml --cov-config=./setup.cfg --cov-report=xml:"fastai.unit.xml" --cov-report term-missing:skip-covered)
-          python -m pytest ./tests/integration/frameworks/test_fastai_unit.py "${OPTS[@]}" || ERR=1
-          if [ $ERR -eq 1 ]; then
-            echo "unit tests for fastai failed!"
-            exit 1
-          fi
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework fastai)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py tests/integration/frameworks/test_fastai_unit.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.fastai == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./fastai.xml,./fastai.unit.xml
-          flags: fastai
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
-  gluon_integration_tests:
+  keras_integration_tests:
     needs: diff
-    if: ${{ false }}
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.gluon == 'true') || github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-gluon
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.gluon == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./gluon.xml
-          flags: gluon
-          verbose: true
-
-  h2o_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.h2o == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-h2o
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.h2o == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./h2o.xml
-          flags: h2o
-          verbose: true
-
-  # keras_with_tf1_integration_tests:
-  #   needs: diff
-  #   if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.keras_tf1 == 'true') || github.event_name == 'push' }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #       with:
-  #         fetch-depth: 0 # fetch all tags and branches
-  #     - name: Setup python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: 3.7.10
-
-  #     - name: Get pip cache dir
-  #       id: cache-dir
-  #       run: |
-  #         echo ::set-output name=dir::$(pip cache dir)
-
-  #     - name: Cache pip dependencies
-  #       uses: actions/cache@v3
-  #       id: cache-pip
-  #       with:
-  #         path: ${{ steps.cache-dir.outputs.dir }}
-  #         key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-  #     - name: Install dependencies
-  #       run: |
-  #         pip install .
-  #         pip install -r requirements/tests-requirements.txt
-
-  #     - name: Run tests and generate coverage report
-  #       run: make tests-keras_tf1
-  #       shell: bash
-
-  #     - name: Upload test coverage to Codecov
-  #       if: ${{ needs.diff.outputs.keras_tf1 == 'true' }}
-  #       uses: codecov/codecov-action@v3
-  #       with:
-  #         directory: ./
-  #         files: ./keras_tf1.xml
-  #         flags: keras
-  #         verbose: true
-
-  keras_with_tf2_integration_tests:
-    needs: diff
-    if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.keras_tf2 == 'true') || github.event_name == 'push' }}
+    if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.keras == 'true') || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -573,24 +243,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install keras "tensorflow>=2.7.3"
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-keras_tf2
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework keras)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.keras_tf2 == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./keras_tf2.xml
-          flags: keras
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   lightgbm_integration_tests:
     needs: diff
@@ -617,24 +288,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install lightgbm
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-lightgbm
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework lightgbm)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.lightgbm == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./lightgbm.xml
-          flags: lightgbm
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   mlflow_integration_tests:
     needs: diff
@@ -661,24 +333,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install mlflow scikit-learn
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-mlflow
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append)
+          coverage run -m pytest tests/integration/frameworks/mlflow "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.mlflow == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./mlflow.xml
-          flags: mlflow
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   onnx_integration_tests:
     needs: diff
@@ -705,71 +378,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install onnx onnxruntime skl2onnx
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-onnx
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework onnx)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.onnx == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./onnx.xml
-          flags: onnx
-          verbose: true
-
-  # TODO:onnxmlir_integration_tests
-
-  paddle_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.paddle == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-paddle
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.paddle == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./paddle.xml
-          flags: paddle
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   picklable_model_integration_tests:
     needs: diff
@@ -796,71 +423,24 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-picklable_model
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework picklable_model)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.paddle == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./picklable_model.xml
-          flags: picklable_model
-          verbose: true
-
-  pycaret_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.pycaret == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-pycaret
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.pycaret == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./pycaret.xml
-          flags: pycaret
-          verbose: true
-
-  # TODO: pyspark_mllib_integration_tests
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   pytorch_integration_tests:
     needs: diff
@@ -887,34 +467,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install torch torchvision
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-pytorch
-        shell: bash
-
-      - name: Run unit test for pytorch
-        shell: bash
         run: |
-          OPTS=(--cov=bentoml --cov-config=./setup.cfg --cov-report=xml:"pytorch.unit.xml" --cov-report term-missing:skip-covered)
-          python -m pytest ./tests/integration/frameworks/test_pytorch_unit.py "${OPTS[@]}" || ERR=1
-          if [ $ERR -eq 1 ]; then
-            echo "unit tests for pytorch failed!"
-            exit 1
-          fi
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework pytorch)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py tests/integration/frameworks/test_pytorch_unit.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.pytorch == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./pytorch.xml,./pytorch.unit.xml
-          flags: pytorch
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   pytorch_lightning_integration_tests:
     needs: diff
@@ -941,24 +512,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install torch torchvision lightning
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-pytorch_lightning
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework pytorch_lightning)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.pytorch_lightning == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./pytorch_lightning.xml
-          flags: pytorch_lightning
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   torchscript_integration_tests:
     needs: diff
@@ -985,24 +557,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install torch torchvision
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-torchscript
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework torchscript)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.torchscript == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./torchscript.xml
-          flags: torchscript
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   sklearn_integration_tests:
     needs: diff
@@ -1029,29 +602,29 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install joblib scikit-learn
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-sklearn
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework sklearn)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.sklearn == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./sklearn.xml
-          flags: sklearn
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
-  spacy_integration_tests:
+  tensorflow_integration_tests:
     needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.spacy == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
+    if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.tensorflow == 'true') || github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -1074,178 +647,30 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install "tensorflow>=2.7.3"
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-spacy
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework tensorflow)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py tests/integration/frameworks/test_tensorflow_unit.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
+
+      - name: Run tests for no eager execution
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --disable-tf-eager-execution --cov-report=xml:no_eager_execution.xml)
+          coverage run -m pytest tests/integration/frameworks/test_tensorflow_unit.py "${OPTS[@]}"
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.spacy == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./spacy.xml
-          flags: spacy
-          verbose: true
-
-  statsmodels_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.statsmodels == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-statsmodels
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.statsmodels == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./statsmodels.xml
-          flags: statsmodels
-          verbose: true
-
-  tensorflow_v1_integration_tests:
-    needs: diff
-    #if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.tf1 == 'true') || github.event_name == 'push' }}
-    if: ${{ false }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.7
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-tf1
-        shell: bash
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.tf1 == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./tf1.xml
-          flags: tensorflow
-          verbose: true
-
-  tensorflow_v2_integration_tests:
-    needs: diff
-    if: ${{ (github.event_name == 'pull_request' && needs.diff.outputs.tf2 == 'true') || github.event_name == 'push' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # fetch all tags and branches
-      - name: Setup python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.8
-
-      - name: Get pip cache dir
-        id: cache-dir
-        run: |
-          echo ::set-output name=dir::$(pip cache dir)
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v3
-        id: cache-pip
-        with:
-          path: ${{ steps.cache-dir.outputs.dir }}
-          key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
-
-
-      - name: Install dependencies
-        run: |
-          pip install .
-          pip install -r requirements/tests-requirements.txt
-
-      - name: Run tests and generate coverage report
-        run: make tests-tensorflow_v2
-        shell: bash
-
-      - name: Run unit test for tensorflow_v2
-        shell: bash
-        run: |
-          OPTS=(--cov=bentoml --cov-config=./setup.cfg --cov-report=xml:"tf2.unit.xml" --cov-report term-missing:skip-covered)
-          python -m pytest ./tests/integration/frameworks/test_tensorflow_v2_unit.py "${OPTS[@]}" || ERR=1
-          if [ $ERR -eq 1 ]; then
-            echo "unit tests for tensorflow_v2 failed!"
-            exit 1
-          fi
-
-      - name: Run tensorflow_v2 without eager execution
-        shell: bash
-        run: |
-          OPTS=(--cov=bentoml --cov-config=./setup.cfg --cov-report=xml:"tf2.unit.no_eager.xml" --cov-report term-missing:skip-covered --disable-tf-eager-execution)
-          python -m pytest ./tests/integration/frameworks/test_tensorflow_v2_unit.py "${OPTS[@]}" || ERR=1
-          if [ $ERR -eq 1 ]; then
-            echo "unit tests for tensorflow_v2 failed!"
-            exit 1
-          fi
-
-      - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.tf2 == 'true' }}
-        uses: codecov/codecov-action@v3
-        with:
-          directory: ./
-          files: ./tf2.xml,./tf2.unit.xml,./tf2.unit.no_eager.xml
-          flags: tensorflow
-          verbose: true
+          files: ./coverage.xml, ./no_eager_execution.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   transformers_integration_tests:
     needs: diff
@@ -1272,34 +697,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install tensorflow tensorflow_hub transformers jax jaxlib flax torch
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-transformers
-        shell: bash
-
-      - name: Run unit test for transformers
-        shell: bash
         run: |
-          OPTS=(--cov=bentoml --cov-config=./setup.cfg --cov-report=xml:"transformers.unit.xml" --cov-report term-missing:skip-covered)
-          python -m pytest ./tests/integration/frameworks/test_transformers_unit.py "${OPTS[@]}" || ERR=1
-          if [ $ERR -eq 1 ]; then
-            echo "unit tests for transformers failed!"
-            exit 1
-          fi
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework transformers)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py tests/integration/frameworks/test_transformers_unit.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.transformers == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./transformers.xml
-          flags: transformers
-          verbose: true
+          files: ./coverage.xml, ./no_eager_execution.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   xgboost_integration_tests:
     needs: diff
@@ -1326,24 +742,25 @@ jobs:
           path: ${{ steps.cache-dir.outputs.dir }}
           key: ${{ runner.os }}-tests-${{ hashFiles('requirements/tests-requirements.txt') }}
 
-
       - name: Install dependencies
         run: |
           pip install .
+          pip install xgboost
           pip install -r requirements/tests-requirements.txt
 
       - name: Run tests and generate coverage report
-        run: make tests-xgboost
-        shell: bash
+        run: |
+          OPTS=(--cov-config pyproject.toml --cov src/bentoml --cov-append --framework xgboost)
+          coverage run -m pytest tests/integration/frameworks/test_frameworks.py "${OPTS[@]}"
+
+      - name: Generate coverage
+        run: coverage xml
 
       - name: Upload test coverage to Codecov
-        if: ${{ needs.diff.outputs.xgboost == 'true' }}
         uses: codecov/codecov-action@v3
         with:
-          directory: ./
-          files: ./xgboost.xml
-          flags: xgboost
-          verbose: true
+          files: ./coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
 
 concurrency:
   group: frameworks${{ github.event.pull_request.number || github.sha }}

@@ -14,7 +14,7 @@ import fs.errors
 
 from bentoml import Tag
 from bentoml.exceptions import BentoMLException
-from bentoml._internal.models import ModelContext
+from bentoml.testing.pytest import TEST_MODEL_CONTEXT
 from bentoml._internal.models import ModelOptions as InternalModelOptions
 from bentoml._internal.models.model import Model
 from bentoml._internal.models.model import ModelInfo
@@ -23,10 +23,6 @@ from bentoml._internal.configuration import BENTOML_VERSION
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-TEST_MODEL_CONTEXT = ModelContext(
-    framework_name="testing", framework_versions={"testing": "v1"}
-)
 
 TEST_PYTHON_VERSION = f"{pyver.major}.{pyver.minor}.{pyver.micro}"
 
@@ -85,6 +81,7 @@ class ModelOptions(InternalModelOptions):
     option_c: list[float]
 
 
+@pytest.mark.usefixtures("change_test_dir")
 def test_model_info(tmpdir: "Path"):
     start = datetime.now(timezone.utc)
     modelinfo_a = ModelInfo(
