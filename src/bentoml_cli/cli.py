@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import click
 import psutil
+from bentoml_cli.deployments import add_deployments_command
 
 from bentoml_cli.env import add_env_command
 from bentoml_cli.serve import add_serve_command
@@ -43,6 +44,7 @@ def create_bentoml_cli() -> click.Group:
     add_start_command(bentoml_cli)
     add_serve_command(bentoml_cli)
     add_containerize_command(bentoml_cli)
+    add_deployments_command(bentoml_cli)
 
     if psutil.WINDOWS:
         import sys
