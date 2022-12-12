@@ -307,7 +307,17 @@ class ModelWithRepositorySchema(ModelSchema):
 
 
 @attr.define
-class BentoFullSchema(BentoSchema):
+class BentoWithRepositorySchema(BentoSchema):
+    repository: BentoRepositorySchema = attr.field(default=None)
+
+
+@attr.define
+class BentoWithRepositoryListSchema(BaseListSchema):
+    items: t.List[BentoWithRepositorySchema] = attr.field(factory=list)
+
+
+@attr.define
+class BentoFullSchema(BentoWithRepositorySchema):
     models: t.List[ModelWithRepositorySchema] = attr.field(factory=list)
 
 
@@ -440,7 +450,7 @@ class DeploymentStatus(Enum):
 
 @attr.define
 class DeploymentSchema(ResourceSchema):
-
+    creator: UserSchema
     cluster: ClusterFullSchema
     status: DeploymentStatus
     urls: t.List[str]
@@ -456,7 +466,7 @@ class DeploymentListSchema(BaseListSchema):
 @attr.define
 class UpdateDeploymentSchema:
     targets: t.List[CreateDeploymentTargetSchema]
-    labels: LabelItemSchema
+    labels: t.Optional[LabelItemSchema]
     description: t.Optional[str]
     do_not_deploy: t.Optional[bool]
 
