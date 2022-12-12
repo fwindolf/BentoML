@@ -63,8 +63,14 @@ class ResourceType(Enum):
     CLUSTER = "cluster"
     BENTO_REPOSITORY = "bento_repository"
     BENTO = "bento"
+    DEPLOYMENT = "deployment"
+    DEPLOYMENT_REVISION = "deployment_revision"
+    TERMINAL_RECORD = "terminal_record"
     MODEL_REPOSITORY = "model_repository"
     MODEL = "model"
+    LABEL = "label"
+    API_TOKEN = "api_token"
+    YATAI_COMPONENT = "yatai_component"
 
 
 @attr.define
@@ -137,9 +143,9 @@ class BentoApiSchema:
 
 @attr.define
 class BentoRunnerResourceSchema:
-    cpu: t.Optional[t.Any]
-    nvidia_gpu: t.Optional[t.Any]
-    custom_resources: t.Optional[t.Any]
+    cpu: t.Optional[t.Any] = attr.field(default=None)
+    nvidia_gpu: t.Optional[t.Any] = attr.field(default=None)
+    custom_resources: t.Optional[t.Any] = attr.field(default=None)
 
 
 @attr.define
@@ -331,40 +337,40 @@ class DeploymentTargetCanaryRuleType(Enum):
 class DeploymentTargetCanaryRule:
     type: DeploymentTargetCanaryRuleType
 
-    weight: t.Optional[int]
-    header: t.Optional[str]
-    cookie: t.Optional[str]
-    header_value: t.Optional[str]
+    weight: t.Optional[int] = attr.field(default=None)
+    header: t.Optional[str] = attr.field(default=None)
+    cookie: t.Optional[str] = attr.field(default=None)
+    header_value: t.Optional[str] = attr.field(default=None)
 
 
 @attr.define
 class DeploymentTargetResourceItem:
-    cpu: t.Optional[str]
-    memory: t.Optional[str]
-    gpu: t.Optional[str]
+    cpu: t.Optional[str] = attr.field(default=None)
+    memory: t.Optional[str] = attr.field(default=None)
+    gpu: t.Optional[str] = attr.field(default=None)
 
 
 @attr.define
 class DeploymentTargetResources:
-    requests: t.Optional[DeploymentTargetResourceItem]
-    limits: t.Optional[DeploymentTargetResourceItem]
+    requests: t.Optional[DeploymentTargetResourceItem] = attr.field(default=None)
+    limits: t.Optional[DeploymentTargetResourceItem] = attr.field(default=None)
 
 
 @attr.define
 class DeploymentTargetHPAConf:
-    cpu: t.Optional[int]
-    gpu: t.Optional[int]
-    memory: t.Optional[str]
-    qps: t.Optional[int]
-    min_replicas: t.Optional[int]
-    max_replicas: t.Optional[int]
+    cpu: t.Optional[int] = attr.field(default=None)
+    gpu: t.Optional[int] = attr.field(default=None)
+    memory: t.Optional[str] = attr.field(default=None)
+    qps: t.Optional[int] = attr.field(default=None)
+    min_replicas: t.Optional[int] = attr.field(default=None)
+    max_replicas: t.Optional[int] = attr.field(default=None)
 
 
 @attr.define
 class DeploymentTargetRunnerConfig:
-    resources: t.Optional[DeploymentTargetResources]
-    hpa_conf: t.Optional[DeploymentTargetHPAConf]
-    envs: t.Optional[t.List[LabelItemSchema]]
+    resources: t.Optional[DeploymentTargetResources] = attr.field(default=None)
+    hpa_conf: t.Optional[DeploymentTargetHPAConf] = attr.field(default=None)
+    envs: t.Optional[t.List[LabelItemSchema]] = attr.field(default=None)
 
 
 @attr.define
@@ -372,17 +378,21 @@ class DeploymentTargetConfig:
     kubeResourceUid: str
     kubeResourceVersion: str
     resources: DeploymentTargetResources
-    hpa_conf: t.Optional[DeploymentTargetHPAConf]
-    envs: t.Optional[t.List[LabelItemSchema]]
-    runners: t.Optional[t.Dict[str, DeploymentTargetRunnerConfig]]
-    enable_ingress: t.Optional[bool]
+    hpa_conf: t.Optional[DeploymentTargetHPAConf] = attr.field(default=None)
+    envs: t.Optional[t.List[LabelItemSchema]] = attr.field(default=None)
+    runners: t.Optional[t.Dict[str, DeploymentTargetRunnerConfig]] = attr.field(
+        default=None
+    )
+    enable_ingress: t.Optional[bool] = attr.field(default=None)
 
 
 @attr.define
 class DeploymentTargetSchema(ResourceSchema):
     bento: BentoFullSchema
-    canary_rules: t.List[DeploymentTargetCanaryRule]
     config: DeploymentTargetConfig
+    canary_rules: t.Optional[t.List[DeploymentTargetCanaryRule]] = attr.field(
+        default=None
+    )
 
 
 class DeploymentTargetType(Enum):
@@ -411,12 +421,12 @@ class DeploymentRevisionStatus(Enum):
 @attr.define
 class DeploymentRevisionSchema(ResourceSchema):
     status: DeploymentRevisionStatus
-    targets: t.List[DeploymentTargetSchema]
+    targets: t.List[DeploymentTargetSchema] = attr.field(factory=list)
 
 
 @attr.define
 class DeploymentRevisionListSchema(BaseListSchema):
-    items: t.List[DeploymentRevisionSchema]
+    items: t.List[DeploymentRevisionSchema] = attr.field(factory=list)
 
 
 @attr.define
@@ -428,7 +438,7 @@ class ClusterConfigAWSSchema:
 class ClusterConfigSchema:
     default_deployment_kube_namespace: str
     ingress_ip: str
-    aws: ClusterConfigAWSSchema
+    aws: t.Optional[ClusterConfigAWSSchema] = attr.field(default=None)
 
 
 @attr.define
@@ -446,6 +456,11 @@ class DeploymentStatus(Enum):
     UNHEALTHY = "unhealthy"
     FAILED = "failed"
     DEPLOYING = "deploying"
+    TERMINATING = "terminating"
+    TERMINATED = "terminated"
+    IMAGE_BUILDING = "image-building"
+    IMAGE_BUILD_FAILED = "image-build-failed"
+    IMAGE_BUILD_SUCCEEDED = "image-build-succeeded"
 
 
 @attr.define
@@ -465,13 +480,18 @@ class DeploymentListSchema(BaseListSchema):
 
 @attr.define
 class UpdateDeploymentSchema:
-    targets: t.List[CreateDeploymentTargetSchema]
-    labels: t.Optional[LabelItemSchema]
-    description: t.Optional[str]
-    do_not_deploy: t.Optional[bool]
+    targets: t.List[CreateDeploymentTargetSchema] = attr.field(factory=list)
+    labels: t.Optional[LabelItemSchema] = attr.field(default=None)
+    description: t.Optional[str] = attr.field(default=None)
+    do_not_deploy: t.Optional[bool] = attr.field(default=None)
 
 
 @attr.define
-class CreateDeploymentSchema(UpdateDeploymentSchema):
+class CreateDeploymentSchema:
     name: str
     kube_namespace: str
+
+    targets: t.List[CreateDeploymentTargetSchema] = attr.field(factory=list)
+    labels: t.Optional[LabelItemSchema] = attr.field(default=None)
+    description: t.Optional[str] = attr.field(default=None)
+    do_not_deploy: t.Optional[bool] = attr.field(default=None)
