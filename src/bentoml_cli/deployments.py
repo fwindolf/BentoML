@@ -1,50 +1,91 @@
 from __future__ import annotations
+from datetime import datetime
+import enum
+import json
 
 import logging
-import json
-from time import sleep
+from pathlib import Path
 import attr
+import cattr
 import yaml
 import click
 import typing as t
 from rich.table import Table
 from rich.syntax import Syntax
 
+from dateutil.parser import parse
+
 from bentoml._internal.yatai_rest_api_client.schemas import (
-    CreateDeploymentTargetSchema,
-    DeploymentStatus,
     CreateDeploymentSchema,
     DeploymentTargetConfig,
-    DeploymentTargetHPAConf,
-    DeploymentTargetResourceItem,
-    DeploymentTargetResources,
-    DeploymentTargetRunnerConfig,
-    DeploymentTargetType,
-    LabelItemSchema,
     UpdateDeploymentSchema,
 )
 
 logger = logging.getLogger("bentoml")
+converter = cattr.Converter()
+
+time_format = "%Y-%m-%d %H:%M:%S.%f"
 
 
-def parse_config(stem: str, config: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-    return {
-        k.removeprefix(stem if stem.endswith(".") else stem + "."): arg
-        for k, arg in config.items()
-        if k.startswith(stem)
-    }
+def datetime_decoder(datetime_str: t.Optional[str], _: t.Any) -> t.Optional[datetime]:
+    if not datetime_str:
+        return None
+    return parse(datetime_str)
 
 
-def set_config(obj: object, key: str, value: t.Any):
-    _obj = obj
-    key_path = key.split(".")
-    for field in key_path[:-1]:
-        if not hasattr(_obj, field):
-            raise AttributeError(f"Can not set {key} in object ({type(obj)})")
+def datetime_encoder(time_obj: t.Optional[datetime]) -> t.Optional[str]:
+    if not time_obj:
+        return None
+    return time_obj.strftime(time_format)
 
-        _obj = getattr(_obj, field)
 
-    setattr(_obj, key_path[-1], value)
+converter.register_structure_hook(datetime, datetime_decoder)
+converter.register_unstructure_hook(datetime, datetime_encoder)
+
+
+def datetime_hmr(value: t.Optional[datetime]) -> str:
+    if value is None:
+        return ""
+    return value.astimezone().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def enum_hmr(value: enum.Enum) -> str:
+    return value.value
+
+
+def config_hmr(config: DeploymentTargetConfig) -> str:
+    limits = config.resources.limits
+    if limits is None:
+        limits_str = "No Limits"
+    else:
+        limits_str = f"Limits: [{limits.cpu}, {limits.memory}]"
+
+    requests = config.resources.requests
+    if requests is None:
+        requests_str = "No Requests"
+    else:
+        requests_str = f"Requests: [{requests.cpu}, {requests.memory}]"
+
+    ingress_str = "Ingress: Enabled" if config.enable_ingress else "Ingress: Disabled"
+
+    return f"{requests_str}, {limits_str}, {ingress_str}"
+
+
+def serialize_values(inst: t.Any, a: t.Any, v: t.Any) -> str:
+    if isinstance(v, datetime):
+        return datetime_hmr(v)
+    if isinstance(v, enum.Enum):
+        return enum_hmr(v)
+
+    return v
+
+
+def parse_extra_args(args: t.List[str]) -> t.List[t.Tuple[str, str]]:
+    split_args = [arg.split("=", maxsplit=1) for arg in args]
+    args = [arg for args in split_args for arg in args]
+    keys = [key.removeprefix("-").removeprefix("-") for key in args[0::2]]
+    values = [val.strip('"').strip("'") for val in args[1::2]]
+    return list(zip(keys, values))
 
 
 def add_deployments_command(cli: click.Group) -> None:
@@ -62,7 +103,7 @@ def add_deployments_command(cli: click.Group) -> None:
 
     @cli.group(name="deployments", cls=BentoMLCommandGroup)
     def deployments_cli():
-        """Yatai Subcommands Groups"""
+        """Deployment Subcommands Groups"""
 
     @deployments_cli.command()
     @click.option(
@@ -72,7 +113,7 @@ def add_deployments_command(cli: click.Group) -> None:
         "-o",
         "--output",
         type=click.Choice(["json", "yaml", "table"]),
-        default="console",
+        default="table",
         help="Output of the request (json, yaml, table)",
     )
     @click.option(
@@ -111,25 +152,20 @@ def add_deployments_command(cli: click.Group) -> None:
                 "name": deployment.name,
                 "status": str(deployment.status.value),
                 "url": deployment.urls[0] if deployment.urls else "",
-                "created_at": deployment.created_at.astimezone().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
-                "updated_at": deployment.updated_at.astimezone().strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                )
+                "created_at": datetime_hmr(deployment.created_at),
+                "updated_at": datetime_hmr(deployment.latest_revision.updated_at)
                 if deployment.updated_at
                 else "",
             }
             for deployment in sorted(
                 deployments.items,
-                key=lambda d: d.updated_at or d.created_at,
+                key=lambda d: d.latest_revision.updated_at or d.created_at,
                 reverse=True,
             )
         ]
 
         if output == "json":
-            info = json.dumps(res, indent=2)
-            console.print_json(info)
+            console.print_json(data=res)
         elif output == "yaml":
             info = yaml.safe_dump(res, indent=2)
             console.print(Syntax(info, "yaml"))  # type: ignore
@@ -150,6 +186,7 @@ def add_deployments_command(cli: click.Group) -> None:
                 )
             console.print(table)
 
+    @deployments_cli.command()
     @click.argument("name", type=click.STRING)
     @click.option(
         "-c", "--cluster", type=click.STRING, default="default", help="Yatai cluster"
@@ -160,8 +197,8 @@ def add_deployments_command(cli: click.Group) -> None:
     @click.option(
         "-o",
         "--output",
-        type=click.Choice(["json", "yaml"]),
-        default="yaml",
+        type=click.Choice(["json", "yaml", "summary"]),
+        default="summary",
         help="Output of the request (json, yaml)",
     )
     def get(cluster: str, name: str, namespace: str, output: str) -> None:  # type: ignore (not accessed)
@@ -176,14 +213,40 @@ def add_deployments_command(cli: click.Group) -> None:
         deployment = yatai_rest_client.get_deployment(
             cluster_name=cluster, deployment_name=name, kube_namespace=namespace
         )
-        res = attr.asdict(deployment)
+        res = attr.asdict(deployment, value_serializer=serialize_values)
         if output == "json":
-            info = json.dumps(res, indent=2)
-            console.print_json(info)
-        else:
+            console.print_json(data=res)
+        elif output == "yaml":
             info = yaml.safe_dump(res, indent=2)
             console.print(Syntax(info, "yaml"))  # type: ignore
+        elif output == "summary":
+            table = Table(box=None)
+            table.add_column("Name")
+            table.add_column("Status")
+            table.add_column("Bento Repository")
+            table.add_column("Bento Version")
+            table.add_column("URLS")
+            table.add_column("Created At")
+            table.add_column("Updated At")
+            table.add_column("ENVs")
+            table.add_column("Config")
 
+            targets = deployment.latest_revision.targets
+            table.add_row(
+                deployment.name,
+                deployment.status.value,
+                ", ".join([target.bento.repository.name for target in targets]),
+                ", ".join([target.bento.name for target in targets]),
+                ", ".join(deployment.urls),
+                datetime_hmr(deployment.created_at),
+                datetime_hmr(deployment.latest_revision.updated_at),
+                ", ".join([str(target.config.envs) for target in targets]),
+                ", ".join([config_hmr(target.config) for target in targets]),
+            )
+
+            console.print(table)
+
+    @deployments_cli.command()
     @click.argument("name", type=click.STRING)
     @click.option(
         "-c", "--cluster", type=click.STRING, default="default", help="Yatai cluster"
@@ -191,10 +254,7 @@ def add_deployments_command(cli: click.Group) -> None:
     @click.option(
         "-n", "--namespace", type=click.STRING, default="yatai", help="k8s namespace"
     )
-    @click.option(
-        "-b", "--block", type=click.BOOL, default=False, help="Wait until terminated"
-    )
-    def terminate(cluster: str, name: str, namespace: str, block: bool) -> None:  # type: ignore (not accessed)
+    def terminate(cluster: str, name: str, namespace: str) -> None:  # type: ignore (not accessed)
         """Terminate a deployment on Yatai.
 
         \b
@@ -208,28 +268,11 @@ def add_deployments_command(cli: click.Group) -> None:
             )
         except Exception as e:
             console.print(f"Could not terminate deployment: {e}")
+            exit(1)
 
-        if not block:
-            return
+        console.print(f"Terminated '{name}'")
 
-        retries = 0
-        while True:
-            deployment = yatai_rest_client.get_deployment(
-                cluster_name=cluster, deployment_name=name, kube_namespace=namespace
-            )
-            if deployment.status == DeploymentStatus.NONDEPLOYED:
-                console.print(f"Deployment '{name}' terminated.")
-                break
-
-            if retries >= 30:
-                console.print(
-                    f"Timed out waiting for deployment '{name}' to terminate."
-                )
-                break
-
-            sleep(0.33)
-            retries += 1
-
+    @deployments_cli.command()
     @click.argument("name", type=click.STRING)
     @click.option(
         "-c", "--cluster", type=click.STRING, default="default", help="Yatai cluster"
@@ -252,30 +295,44 @@ def add_deployments_command(cli: click.Group) -> None:
         except Exception as e:
             console.print(f"Could not delete deployment: {e}")
 
-    @click.argument(
-        "name",
-        type=click.STRING,
-        help="Name of the deployment. Must be unique for this cluster and namespace",
+    @deployments_cli.command(
+        context_settings=dict(
+            allow_extra_args=True,
+            ignore_unknown_options=True,
+        )
     )
-    @click.argument(
-        "bento_repository",
-        type=click.STRING,
-        help="Bento repository that contains the bento",
-    )
-    @click.argument(
-        "bento",
-        type=click.STRING,
-        help="Version of the bento to deploy. Can not be latest.",
-    )
+    @click.argument("name", type=click.STRING)
+    @click.argument("bento_repository", type=click.STRING)
+    @click.argument("bento", type=click.STRING)
     @click.option(
         "-c", "--cluster", type=click.STRING, default="default", help="Yatai cluster"
     )
     @click.option(
         "-n", "--namespace", type=click.STRING, default="yatai", help="k8s namespace"
     )
-    @click.option("-l", "--label", type=click.STRING, help="labels like 'foo:bar'")
+    @click.option(
+        "--description", type=click.STRING, default=None, help="Deployment description"
+    )
+    @click.option(
+        "-l",
+        "--labels",
+        type=click.STRING,
+        help="Deployment label like 'foo:bar'",  # TODO: multiple
+    )
     @click.option(
         "--do-not-deploy", type=click.BOOL, default=False, help="Do not deploy"
+    )
+    @click.option(
+        "--config-json",
+        type=click.STRING,
+        default=None,
+        help="Path to input json file that contains the deployment definition",
+    )
+    @click.option(
+        "--config-yaml",
+        type=click.STRING,
+        default=None,
+        help="Path to input yaml file that contains the deployment definition",
     )
     def create(  # type: ignore (not accessed)
         cluster: str,
@@ -283,178 +340,136 @@ def add_deployments_command(cli: click.Group) -> None:
         namespace: str,
         bento_repository: str,
         bento: str,
-        description: str,
-        label: str,
+        description: t.Optional[str],
+        labels: t.List[str],
         do_not_deploy: bool,
-        **kwargs,  # type: ignore
+        config_json: t.Optional[str],
+        config_yaml: t.Optional[str],
     ) -> None:
         """Create a new deployment on Yatai.
-        
+
         \b
-        bentoml deployments create iris_classifier_a iris_classifier qojf5xauugwqtgxi
         bentoml deployments create iris_classifier_a iris_classifier qojf5xauugwqtgxi \\
-            --cluster test \\
-            --namespace yatai-iris \\
-            --description "Iris Classifier" \\
-            --label "group:A" \\
-            --do-not-deploy \\
-            --config.resources.requests.cpu 1000m \\
-            --config.resources.requests.memory 512Mi \\
-            --config.resources.requests.gpu 1 \\
-            --config.resources.limits.cpu 1500m \\
-            --config.resources.limits.memory 1024Mi \\
-            --config.resources.limits.gpu 1 \\
-            --config.hpa_conf.cpu 1000m \\
-            --config.hpa_conf.memory 512Mi \\
-            --config.hpa_conf.qps 100 \\
-            --config.hpa_conf.min_replicas 1 \\
-            --config.hpa_conf.max_replicas 10 \\
-            --config.env DEVELOPMENT=1
-            --config.env LOG_LEVEL=DEBUG
-            --config.runners.iris_runner_A.resources... \\
-            --config.runners.iris_runner_A.hpa_conf... \\
-            --config.runners.iris_runner_A.env... \\
-            --config.runners.iris_runner_A.resources.requests.memory 512Mi \\
-            --config.enable_ingress 1
+            --config-json ./iris_classifier.json
+        bentoml deployments create iris_classifier_a iris_classifier qojf5xauugwqtgxi \\
+            --config-yaml ./iris_classifier.yaml
         """
-        config = parse_config("config", kwargs)  # type: ignore
-        resource_requests = parse_config("config.resources.requests", kwargs)  # type: ignore
-        resource_limits = parse_config("config.resources.limits", kwargs)  # type: ignore
-        hpa_conf = parse_config("config.hpa_conf", kwargs)  # type: ignore
-        envs = parse_config("config.env", kwargs)  # type: ignore
+        if config_json:
+            config_path = Path(config_json).resolve()
+            assert config_path.exists(), f"Config JSON not found at {config_path}"
+            config = json.loads(config_path.read_text())
+        elif config_yaml:
+            config_path = Path(config_yaml).resolve()
+            assert config_path.exists(), f"Config Yaml not found at {config_path}"
+            config = yaml.load(config_path.read_bytes())
+        else:
+            raise CLIException("Missing deployment configuration")
 
-        runners = {
-            runner.split(".")[0]
-            for runner in parse_config("config.runners", kwargs).keys()
-        }
-        runner_configs = {}
-        for runner in runners:
-            config_name = f"config.runners.{runner}"
-            runner_envs = parse_config(f"{config_name}.env", kwargs)  # type: ignore
-            runner_hpa_conf = parse_config(f"{config_name}.hpa_conf", kwargs)  # type: ignore
-            runner_requests = parse_config(f"{config_name}.resources.requests", kwargs)  # type: ignore
-            runner_limits = parse_config(f"{config_name}.resources.limits", kwargs)  # type: ignore
+        # TODO: I envision it like this:
+        # You have a generic deployment configuration template and want to deploy bentos
+        # with this configuration. So we put in the non-generic information into the
+        # template configuration.
+        # What's left here would be to make every parameter optional so we can also use
+        # the complete configuration if need be.
+        config["name"] = name
+        config["kube_namespace"] = namespace
+        config["description"] = description
+        config["labels"] = labels
+        config["do_not_deploy"] = do_not_deploy
+        config["targets"][0]["bento"] = bento
+        config["targets"][0]["bento_repository"] = bento_repository
 
-            runner_config = DeploymentTargetRunnerConfig(
-                envs=[LabelItemSchema(*env.split("=")) for env in runner_envs],
-                hpa_conf=DeploymentTargetHPAConf(**runner_hpa_conf),
-                resources=DeploymentTargetResources(
-                    DeploymentTargetResourceItem(**runner_requests),
-                    DeploymentTargetResourceItem(**runner_limits),
-                ),
-            )
-            runner_configs[runner] = runner_config
+        schema = converter.structure(config, CreateDeploymentSchema)
+        try:
+            yatai_rest_client.create_deployment(cluster, schema)
+        except Exception as e:
+            raise CLIException(f"Could not create deployment: {e}")
 
-        target_schema = CreateDeploymentTargetSchema(
-            type=DeploymentTargetType.STABLE,
-            bento=bento,
-            bento_repository=bento_repository,
-            config=DeploymentTargetConfig(
-                kubeResourceUid="",
-                kubeResourceVersion="",
-                resources=DeploymentTargetResources(
-                    DeploymentTargetResourceItem(**resource_requests),
-                    DeploymentTargetResourceItem(**resource_limits),
-                ),
-                hpa_conf=DeploymentTargetHPAConf(**hpa_conf),
-                envs=[LabelItemSchema(*env.split("=")) for env in envs] or None,
-                runners=runner_configs,
-                enable_ingress=config["enable_ingress"],
-            ),
-            canary_rules=[],
+    @deployments_cli.command(
+        context_settings=dict(
+            allow_extra_args=True,
+            ignore_unknown_options=True,
         )
-
-        schema = CreateDeploymentSchema(
-            name=name,
-            description=description,
-            kube_namespace=namespace,
-            labels=LabelItemSchema(*label.split(":")),
-            targets=[target_schema],
-            do_not_deploy=do_not_deploy,
-        )
-        yatai_rest_client.create_deployment(cluster, schema)
-
-    @click.argument(
-        "name",
-        type=click.STRING,
-        help="Name of the deployment. Must be unique for this cluster and namespace",
     )
-    @click.argument(
-        "bento",
-        type=click.STRING,
-        help="Version of the bento to deploy. Can not be latest.",
-    )
-    @click.option("-l", "--label", type=click.STRING, help="labels like 'foo:bar'")
+    @click.argument("name", type=click.STRING)
+    @click.argument("bento", type=click.STRING)
     @click.option(
         "-n", "--namespace", type=click.STRING, default="yatai", help="k8s namespace"
     )
     @click.option(
         "-c", "--cluster", type=click.STRING, default="default", help="Yatai cluster"
     )
+    @click.option(
+        "--description", type=click.STRING, default=None, help="Deployment description"
+    )
+    @click.option(
+        "-l",
+        "--labels",
+        type=click.STRING,
+        help="Deployment label like 'foo:bar'",  # TODO: multiple
+    )
+    @click.option(
+        "--do-not-deploy", type=click.BOOL, default=False, help="Do not deploy"
+    )
+    @click.option(
+        "--config-json",
+        type=click.STRING,
+        default=None,
+        help="Path to input json file that contains the deployment definition",
+    )
+    @click.option(
+        "--config-yaml",
+        type=click.STRING,
+        default=None,
+        help="Path to input yaml file that contains the deployment definition",
+    )
+    @click.pass_context
     def update(  # type: ignore (not accessed)
         cluster: str,
         name: str,
         namespace: str,
         bento: t.Optional[str],
         description: t.Optional[str],
+        labels: t.List[str],
         do_not_deploy: bool,
-        label: t.Optional[str] = None,
-        **kwargs,  # type: ignore
+        config_json: t.Optional[str],
+        config_yaml: t.Optional[str],
     ) -> None:
         """Update a deployment on Yatai to the specified bento
-        
-        bentoml deployments update iris_classifier_a qojf5xauugwqtgxi
+
         bentoml deployments update iris_classifier_a qojf5xauugwqtgxi \\
-            --cluster test \\
-            --namespace yatai-iris \\
-            --description "Iris Classifier" \\
-            --label "group:A" \\
-            --do-not-deploy \\
-            --config.resources.requests.cpu 1000m \\
-            --config.resources.requests.memory 512Mi \\
-            --config.resources.requests.gpu 1 \\
-            --config.resources.limits.cpu 1500m \\
-            --config.resources.limits.memory 1024Mi \\
-            --config.resources.limits.gpu 1 \\
-            --config.hpa_conf.cpu 1000m \\
-            --config.hpa_conf.memory 512Mi \\
-            --config.hpa_conf.qps 100 \\
-            --config.hpa_conf.min_replicas 1 \\
-            --config.hpa_conf.max_replicas 10 \\
-            --config.env DEVELOPMENT=1
-            --config.env LOG_LEVEL=DEBUG
-            --config.runners.iris_runner_A.resources... \\
-            --config.runners.iris_runner_A.hpa_conf... \\
-            --config.runners.iris_runner_A.env... \\
-            --config.runners.iris_runner_A.resources.requests.memory 512Mi \\
-            --config.enable_ingress 1
+            --config-json ./iris_classifier_a.json
+        bentoml deployments update iris_classifier_a qojf5xauugwqtgxi \\
+            --config-yaml ./iris_classifier_a.yaml
         """
         deployment = yatai_rest_client.get_deployment(
             cluster_name=cluster, deployment_name=name, kube_namespace=namespace
         )
 
-        target = deployment.latest_revision.targets[0]
-        update_target = CreateDeploymentTargetSchema(
-            bento_repository=target.bento.repository.name,
-            bento=bento or target.bento.name,
-            canary_rules=target.canary_rules,
-            config=target.config,
-            type=DeploymentTargetType.STABLE,
-        )
-        for key, arg in kwargs.items():  # type: ignore
-            if not key.startswith("config"):
-                continue
+        if config_json:
+            config_path = Path(config_json).resolve()
+            assert config_path.exists(), f"Config JSON not found at {config_path}"
+            config = json.loads(config_path.read_text())
+        elif config_yaml:
+            config_path = Path(config_yaml).resolve()
+            assert config_path.exists(), f"Config Yaml not found at {config_path}"
+            config = yaml.load(config_path.read_bytes())
+        else:
+            raise CLIException("Missing deployment configuration")
 
-            set_config(update_target.config, key.removesuffix("config."), arg)
+        config["description"] = description
+        config["bento"] = bento
+        config["labels"] = labels
+        config["do_not_deploy"] = do_not_deploy
+
+        current_config = converter.unstructure(deployment, UpdateDeploymentSchema)
+        config = current_config | config
+
+        schema = converter.structure(config, UpdateDeploymentSchema)
 
         yatai_rest_client.update_deployment(
             cluster_name=cluster,
             deployment_name=name,
             kube_namespace=namespace,
-            req=UpdateDeploymentSchema(
-                description=description,
-                labels=LabelItemSchema(*label.split(":")) if label else None,
-                targets=[update_target],
-                do_not_deploy=do_not_deploy,
-            ),
+            req=schema,
         )

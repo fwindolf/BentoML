@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import click
 import psutil
-from bentoml_cli.deployments import add_deployments_command
 
 from bentoml_cli.env import add_env_command
 from bentoml_cli.serve import add_serve_command
@@ -12,6 +11,7 @@ from bentoml_cli.yatai import add_login_command
 from bentoml_cli.bentos import add_bento_management_commands
 from bentoml_cli.models import add_model_management_commands
 from bentoml_cli.containerize import add_containerize_command
+from bentoml_cli.deployments import add_deployments_command
 
 
 def create_bentoml_cli() -> click.Group:
