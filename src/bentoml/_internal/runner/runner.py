@@ -128,7 +128,7 @@ class Runner:
         else:
             if not all(isinstance(model, Model) for model in models):
                 raise ValueError(
-                    f"models must be a list of 'bentoml.Model'. Got { {type(model) for model in models if isinstance(model, Model)} } instead."
+                    f"models must be a list of 'bentoml.Model'. Got { {type(model) for model in models if not isinstance(model, Model)} } instead."
                 )
         runner_method_map: dict[str, RunnerMethod[t.Any, t.Any, t.Any]] = {}
         runnable_init_params = (
@@ -223,7 +223,18 @@ class Runner:
     def _init_local(self) -> None:
         from .runner_handle.local import LocalRunnerRef
 
-        self._init(LocalRunnerRef)
+        try:
+            self._init(LocalRunnerRef)
+        except Exception as e:
+            import traceback
+
+            logger.error(
+                "An exception occurred while instantiating runner '%s', see details below:",
+                self.name,
+            )
+            logger.error(traceback.format_exc())
+
+            raise e
 
     def init_local(self, quiet: bool = False) -> None:
         """
